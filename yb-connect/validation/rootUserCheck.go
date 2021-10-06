@@ -2,17 +2,16 @@ package validation
 
 import (
 	"fmt"
-	"os"
 	"os/user"
 )
 
-func VerifyRootUser() {
+func VerifyRootUser() error {
 
 	var isRootUser bool
 
 	currentUser, err := user.Current()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	if currentUser.Username == "root" {
@@ -20,7 +19,8 @@ func VerifyRootUser() {
 	}
 
 	if !isRootUser {
-		fmt.Println("ERROR: must be run as root. Please re-run as root or with sudo.")
-		os.Exit(1)
+		return fmt.Errorf("must be run as root. Please re-run as root or with sudo.")
 	}
+
+	return nil
 }
