@@ -1,6 +1,6 @@
 include global.mk
 
-YBTOOLS = ycrc yugatool yugaware-client
+YBTOOLS = ycrc yugatool yugaware-client yb-connect
 
 all: ${YBTOOLS}
 

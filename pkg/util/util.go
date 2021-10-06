@@ -46,6 +46,20 @@ func PasswordPrompt() (string, error) {
 	}
 	fmt.Println()
 
+	return string(password), nil
+}
+
+func PasswordPromptConfirm() (string, error) {
+	promptError := func(err error) (string, error) {
+		return "", fmt.Errorf("unable to get password: %w", err)
+	}
+	fmt.Print("Enter password: ")
+	password, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		return promptError(err)
+	}
+	fmt.Println()
+
 	fmt.Print("Confirm password: ")
 	confirmation, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Println()
