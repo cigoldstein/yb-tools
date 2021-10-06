@@ -1,4 +1,4 @@
-package cmdutil
+package log
 
 import (
 	"github.com/go-logr/logr"
