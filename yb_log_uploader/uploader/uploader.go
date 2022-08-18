@@ -1,7 +1,7 @@
 package uploader
 
 import (
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"main/log"
 	"net/http"
@@ -9,7 +9,14 @@ import (
 
 var logger = log.Log()
 
-func createDropzonePackage(dropzoneId string) {
+type packageInfo struct {
+	PackageID    string `json:"packageId"`
+	PackageCode  string `json:"packageCode"`
+	ServerSecret string `json:"serverSecret"`
+	Response     string `json:"response"`
+}
+
+func createDropzonePackage(dropzoneId string) packageInfo {
 
 	url := "https://secure-upload.yugabyte.com/drop-zone/v2.0/package/"
 	ssApiKeyHeader := dropzoneId
@@ -29,11 +36,18 @@ func createDropzonePackage(dropzoneId string) {
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
-	logger.Info(resp.StatusCode)
-	fmt.Println(string(body))
+
+	var bodyJson packageInfo
+	err = json.Unmarshal(body, &bodyJson)
+
+	return bodyJson
+}
+
+func addFileToPackage() {
 
 }
 
-func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChanged bool) {
-	createDropzonePackage(dropzoneId)
+func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChanged bool, files []string) {
+	packageInfo := createDropzonePackage(dropzoneId)
+	//addFileToPackage()
 }
