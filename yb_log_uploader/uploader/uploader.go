@@ -221,7 +221,9 @@ func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChan
 	apiFileInfo.Response = "SUCCESS"
 	apiFileInfo.Message = "c164b143-db33-436d-ab1c-75809a640dc4"
 
-	urlInfo := getUploadUrls()
-	logger.Infof("%+v\n", urlInfo)
+	//urlInfo := getUploadUrls()
+	//logger.Infof("%+v\n", urlInfo)
+
+	generateKeyPair()
 
 }
