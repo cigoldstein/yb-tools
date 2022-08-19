@@ -11,7 +11,7 @@ import (
 var logger = log.Log()
 
 var filesFlag []string
-var caseNumFlag int
+var caseNumFlag int = 0
 var emailFlag string
 var dropzoneIdFlag string
 
