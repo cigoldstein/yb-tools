@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"main/log"
+	"main/openpgp"
 	"math"
 	"net/http"
 	"os"
@@ -233,7 +234,7 @@ func chunkAndEncryptFiles() {
 		//}
 
 		logger.Info("Encrypting partBuffer")
-		encryptedPartBuffer, decryptedPartBuffer := encryptFileParts(partBuffer)
+		encryptedPartBuffer, decryptedPartBuffer := openpgp.EncryptFileParts(partBuffer)
 
 		// write/save buffer to disk
 		ioutil.WriteFile(fileName, encryptedPartBuffer, os.ModeAppend)
