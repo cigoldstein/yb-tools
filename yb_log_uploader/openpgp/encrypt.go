@@ -31,7 +31,8 @@ func Encrypt(entity *openpgp.Entity, message []byte) ([]byte, error) {
 	}
 
 	// Create compressor with encryptor
-	compressorWriter, err := gzip.NewWriterLevel(encryptorWriter, gzip.BestCompression)
+	// Switching this to "NoCompression since it's required by SendSafely, but leaving it so that it's easy to change later
+	compressorWriter, err := gzip.NewWriterLevel(encryptorWriter, gzip.NoCompression)
 	if err != nil {
 		return []byte{}, fmt.Errorf("Invalid compression level: %v", err)
 	}
@@ -74,13 +75,13 @@ func EncryptFileParts(unencryptedFilePart []uint8) ([]byte, []byte) {
 
 	logger.Info("Created public key entity.")
 
+	logger.Info("Encrypting test message with public key entity.")
 	encryptedFilePart, err := Encrypt(pubEntity, []byte(unencryptedFilePart))
 	if err != nil {
 		// handle error
 	}
 
-	logger.Info("Encrypted test message with public key entity.")
-	logger.Info("Encrypted message: ", encryptedFilePart)
+	//logger.Info("Encrypted message: ", encryptedFilePart)
 
 	//decryptedMessage := string(decrypted)
 	//if decryptedMessage != "Hello World!" {

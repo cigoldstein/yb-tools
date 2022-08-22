@@ -182,7 +182,9 @@ func markPackageComplete() {
 
 }
 
-func chunkAndEncryptFiles() {
+func chunkAndEncryptFiles() []string {
+
+	var fileNames []string
 
 	fileToChunk := "/home/craig/github/cigoldstein/yb-tools/yb_log_uploader/testfile.txt"
 
@@ -239,6 +241,8 @@ func chunkAndEncryptFiles() {
 		// write/save buffer to disk
 		ioutil.WriteFile(fileName, encryptedPartBuffer, os.ModeAppend)
 
+		fileNames = append(fileNames, fileName)
+
 		decryptedFileName := fileName + "_decrypted"
 		_, err = os.Create(decryptedFileName)
 
@@ -247,6 +251,12 @@ func chunkAndEncryptFiles() {
 
 	}
 
+	return fileNames
+
+}
+
+func uploadFilesToPackage(fileNames []string) {
+	// TODO start here
 }
 
 func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChanged bool, files []string) {
@@ -291,5 +301,16 @@ func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChan
 
 	//generateKeyPair()
 
-	chunkAndEncryptFiles()
+	//fileNames := chunkAndEncryptFiles()
+
+	var fileNames []string
+	fileNames = append(fileNames,
+		"split_files/testfile.txt_0",
+		"split_files/testfile.txt_1",
+		"split_files/testfile.txt_2",
+		"split_files/testfile.txt_3",
+	)
+
+	uploadFilesToPackage(fileNames)
+
 }
