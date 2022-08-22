@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"main/log"
+	"math"
 	"net/http"
+	"os"
+	"strconv"
 )
 
 var logger = log.Log()
@@ -174,17 +177,78 @@ func getUploadUrls() uploadUrlInfo {
 
 }
 
-func encryptFileParts() {
-
-}
-
 func markPackageComplete() {
 
 }
 
-func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChanged bool, files []string) {
+func chunkAndEncryptFiles() {
 
-	logger.Info(apiRequestInfo.url)
+	fileToChunk := "/home/craig/github/cigoldstein/yb-tools/yb_log_uploader/testfile.txt"
+
+	logger.Info("File to chunk: ", fileToChunk)
+
+	file, err := os.Open(fileToChunk)
+
+	if err != nil {
+		logger.Error(err)
+		os.Exit(1)
+	}
+
+	defer file.Close()
+
+	fileInfo, _ := file.Stat()
+
+	var fileSize int64 = fileInfo.Size()
+
+	logger.Info(fileInfo, "|", fileSize)
+
+	const fileChunk = 2.5 * (1 << 20) // 1 MB, change this to your requirement
+
+	totalPartsNum := uint64(math.Ceil(float64(fileSize) / float64(fileChunk)))
+
+	logger.Infof("Splitting to %d pieces.", totalPartsNum)
+
+	for i := uint64(0); i < totalPartsNum; i++ {
+
+		partSize := int(math.Min(fileChunk, float64(fileSize-int64(i*fileChunk))))
+		partBuffer := make([]byte, partSize)
+
+		file.Read(partBuffer)
+
+		// write to disk
+		fileName := "split_files/testfile.txt_" + strconv.FormatUint(i, 10)
+		_, err := os.Create(fileName)
+
+		if err != nil {
+			logger.Error(err)
+			os.Exit(1)
+		}
+
+		logger.Info("Name of file part: ", fileName)
+		// encrypt file part
+		//unencryptedFilePart, err := os.ReadFile(fileName)
+		//if err != nil {
+		//	logger.Error(err)
+		//	os.Exit(1)
+		//}
+
+		logger.Info("Encrypting partBuffer")
+		encryptedPartBuffer, decryptedPartBuffer := encryptFileParts(partBuffer)
+
+		// write/save buffer to disk
+		ioutil.WriteFile(fileName, encryptedPartBuffer, os.ModeAppend)
+
+		decryptedFileName := fileName + "_decrypted"
+		_, err = os.Create(decryptedFileName)
+
+		logger.Info("Writing decrypted file: ", decryptedFileName)
+		ioutil.WriteFile(decryptedFileName, decryptedPartBuffer, os.ModeAppend)
+
+	}
+
+}
+
+func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChanged bool, files []string) {
 
 	apiRequestInfo.ssApiKeyHeader = dropzoneId
 	apiRequestInfo.ssRequestApiHeader = "DROP_ZONE"
@@ -224,6 +288,7 @@ func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChan
 	//urlInfo := getUploadUrls()
 	//logger.Infof("%+v\n", urlInfo)
 
-	generateKeyPair()
+	//generateKeyPair()
 
+	chunkAndEncryptFiles()
 }
