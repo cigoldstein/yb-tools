@@ -8,7 +8,9 @@ import (
 
 func generateKeyPair(fullname string, comment string, email string) (PGPKeyPair, error) {
 	var e *openpgp.Entity
+
 	e, err := openpgp.NewEntity(fullname, comment, email, nil)
+
 	if err != nil {
 		return PGPKeyPair{}, err
 	}
