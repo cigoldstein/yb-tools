@@ -172,7 +172,7 @@ func getUploadUrls() uploadUrlInfo {
 
 	var bodyJson uploadUrlInfo
 	err = json.Unmarshal(body, &bodyJson)
-	logger.Info(string(body))
+	//logger.Info(string(body))
 
 	return bodyJson
 
@@ -255,8 +255,42 @@ func chunkAndEncryptFiles() []string {
 
 }
 
-func uploadFilesToPackage(fileNames []string) {
-	// TODO start here
+func uploadFilePartsToPackage(fileNames []string, urlInfo uploadUrlInfo) {
+
+	logger.Info("File parts to upload: ", fileNames)
+
+	for i, fileName := range fileNames {
+		logger.Info(i, " ", fileName)
+		logger.Info(urlInfo.UploadUrls[i].URL)
+
+		apiRequestInfo.url = fmt.Sprintf(urlInfo.UploadUrls[i].URL)
+
+		client := &http.Client{}
+
+		file, err := ioutil.ReadFile(fileName)
+		rb := bytes.NewReader(file)
+
+		if err != nil {
+			logger.Error("unable to read file")
+			os.Exit(1)
+		}
+
+		req, err := http.NewRequest(http.MethodPut, "https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-1?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d5JgAAsR1hN8OIud5AKfYzfM6PQM%3D\"},{\"part\":2,\"url\":\"https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-2?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d%2FsX3Hrvg5HizfLtjTRaZ%2BjsC8zo%3D", rb)
+		if err != nil {
+			panic(err)
+		}
+		req.Header.Set("ss-api-key-header", apiRequestInfo.ssApiKeyHeader)
+		req.Header.Set("ss-request-api-header", apiRequestInfo.ssRequestApiHeader)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			panic(err)
+		}
+
+		// TODO: returns a 200? lies.
+		logger.Info(resp.StatusCode, " | ", resp.Header)
+
+	}
 }
 
 func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChanged bool, files []string) {
@@ -296,7 +330,7 @@ func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChan
 	apiFileInfo.Response = "SUCCESS"
 	apiFileInfo.Message = "c164b143-db33-436d-ab1c-75809a640dc4"
 
-	//urlInfo := getUploadUrls()
+	urlInfo := getUploadUrls()
 	//logger.Infof("%+v\n", urlInfo)
 
 	//generateKeyPair()
@@ -304,13 +338,8 @@ func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChan
 	//fileNames := chunkAndEncryptFiles()
 
 	var fileNames []string
-	fileNames = append(fileNames,
-		"split_files/testfile.txt_0",
-		"split_files/testfile.txt_1",
-		"split_files/testfile.txt_2",
-		"split_files/testfile.txt_3",
-	)
+	fileNames = append(fileNames, "split_files/testfile.txt_0", "split_files/testfile.txt_1")
 
-	uploadFilesToPackage(fileNames)
+	uploadFilePartsToPackage(fileNames, urlInfo)
 
 }
