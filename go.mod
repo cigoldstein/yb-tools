@@ -14,7 +14,6 @@ require (
 	github.com/go-openapi/strfmt v0.20.1
 	github.com/go-openapi/swag v0.19.15
 	github.com/go-openapi/validate v0.20.2
-	github.com/go-swagger/go-swagger v0.27.0 // indirect
 	github.com/gocql/gocql v0.0.0-20210817081954-bc256bbb90de
 	github.com/golangci/golangci-lint v1.42.1
 	github.com/google/uuid v1.3.0
@@ -31,7 +30,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.8.1
 	github.com/spyzhov/ajson v0.4.2
-	github.com/yudai/gojsondiff v1.0.0 // indirect
+	github.com/yudai/gojsondiff v1.0.0
 	github.com/yugabyte/gocql v0.0.0-20200602185649-ef3952a45ff4
 	go.uber.org/zap v1.19.0
 	golang.org/x/net v0.0.0-20210825183410-e898025ed96a
