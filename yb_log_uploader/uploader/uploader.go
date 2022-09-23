@@ -236,10 +236,12 @@ func chunkAndEncryptFiles() []string {
 		//}
 
 		logger.Info("Encrypting partBuffer")
-		encryptedPartBuffer, decryptedPartBuffer := openpgp.EncryptFileParts(partBuffer)
+		encryptedPartBufferReader, decryptedPartBuffer := openpgp.EncryptFileParts(partBuffer)
+		buf := &bytes.Buffer{}
+		buf.ReadFrom(encryptedPartBufferReader)
 
 		// write/save buffer to disk
-		ioutil.WriteFile(fileName, encryptedPartBuffer, os.ModeAppend)
+		ioutil.WriteFile(fileName, buf.Bytes(), os.ModeAppend)
 
 		fileNames = append(fileNames, fileName)
 
@@ -335,10 +337,10 @@ func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChan
 
 	//generateKeyPair()
 
-	//fileNames := chunkAndEncryptFiles()
+	fileNames := chunkAndEncryptFiles()
 
-	var fileNames []string
-	fileNames = append(fileNames, "split_files/testfile.txt_0", "split_files/testfile.txt_1")
+	//var fileNames []string
+	//fileNames = append(fileNames, "split_files/testfile.txt_0", "split_files/testfile.txt_1")
 
 	uploadFilePartsToPackage(fileNames, urlInfo)
 
