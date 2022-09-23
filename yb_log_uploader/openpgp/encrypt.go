@@ -52,7 +52,7 @@ func Encrypt(entity *openpgp.Entity, message []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func EncryptFileParts(unencryptedFilePart []uint8) ([]byte, []byte) {
+func EncryptFileParts(unencryptedFilePart []uint8) (io.Reader, []byte) {
 
 	//message := "Hello world!"
 
@@ -76,7 +76,7 @@ func EncryptFileParts(unencryptedFilePart []uint8) ([]byte, []byte) {
 	logger.Info("Created public key entity.")
 
 	logger.Info("Encrypting test message with public key entity.")
-	encryptedFilePart, err := Encrypt(pubEntity, []byte(unencryptedFilePart))
+	encryptedArmoredFilePart, err := Encrypt(pubEntity, unencryptedFilePart)
 	if err != nil {
 		// handle error
 	}
@@ -90,7 +90,14 @@ func EncryptFileParts(unencryptedFilePart []uint8) ([]byte, []byte) {
 	//
 	//logger.Info(decryptedMessage)
 	//logger.Info("Decrypted message equals original message.")
-	//logger.Info("Entcrypt test: END\n")
+	//logger.Info("Encrypt test: END\n")
+
+	r := bytes.NewReader(encryptedArmoredFilePart)
+	encryptedBlockFilePart, err := armor.Decode(r)
+	if err != nil {
+		// handle error
+	}
+	logger.Info("Encrypted file part to block.")
 
 	privEntity, err := getEntity([]byte(pair.PublicKey), []byte(pair.PrivateKey))
 	if err != nil {
@@ -98,11 +105,11 @@ func EncryptFileParts(unencryptedFilePart []uint8) ([]byte, []byte) {
 	}
 	logger.Info("Created private key entity.")
 
-	decryptedFilePart, err := Decrypt(privEntity, encryptedFilePart)
+	decryptedArmoredFilePart, err := Decrypt(privEntity, encryptedArmoredFilePart)
 	if err != nil {
 		// handle error
 	}
 	logger.Info("Decrypted message with private key entity.")
 
-	return encryptedFilePart, decryptedFilePart
+	return encryptedBlockFilePart.Body, decryptedArmoredFilePart
 }
