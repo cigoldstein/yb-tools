@@ -3,7 +3,9 @@ package openpgp
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto"
 	"fmt"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"io"
 	"main/log"
 	"os"
@@ -14,7 +16,7 @@ import (
 
 var logger = log.Log()
 
-func Encrypt(entity *openpgp.Entity, message []byte) ([]byte, error) {
+func Encrypt(passphrase []byte, message []byte) ([]byte, error) {
 	// Create buffer to write output to
 	buf := new(bytes.Buffer)
 
@@ -24,8 +26,14 @@ func Encrypt(entity *openpgp.Entity, message []byte) ([]byte, error) {
 		return []byte{}, fmt.Errorf("Error creating OpenPGP armor: %v", err)
 	}
 
+	var encryptConfig packet.Config
+	encryptConfig.DefaultCipher = packet.CipherAES256
+	encryptConfig.DefaultCompressionAlgo = packet.CompressionNone
+	encryptConfig.DefaultHash = crypto.SHA256
+	encryptConfig.S2KCount = 65535
+
 	// Create encryptor with encoder
-	encryptorWriter, err := openpgp.Encrypt(encoderWriter, []*openpgp.Entity{entity}, nil, nil, nil)
+	encryptorWriter, err := openpgp.SymmetricallyEncrypt(encoderWriter, passphrase, nil, &encryptConfig)
 	if err != nil {
 		return []byte{}, fmt.Errorf("Error creating entity for encryption: %v", err)
 	}
@@ -62,12 +70,16 @@ func EncryptFileParts(unencryptedFilePart []uint8) (io.Reader, []byte) {
 		os.Exit(1)
 	}
 
+	clientSecret := "JoGe9M6DRXcvdhfjK3ggQLvNZKsE3b1kgGP6dAEmJlM"
+	serverSecret := "ABSEtmWY2RavL57pcyoXBm4pZ-qHCcPAwg"
+	passphrase := serverSecret + clientSecret
+
 	//logger.Infof("%+v\n", pair)
 
 	//logger.Info("message: ", message)
 	//logger.Info("Encrypt file: ", unencryptedFilePart)
 	logger.Info("Encrypt test: START")
-	pubEntity, err := getEntity([]byte(pair.PublicKey), []byte{})
+	//pubEntity, err := getEntity([]byte(pair.PublicKey), []byte{})
 
 	if err != nil {
 		// handle error
@@ -76,7 +88,7 @@ func EncryptFileParts(unencryptedFilePart []uint8) (io.Reader, []byte) {
 	logger.Info("Created public key entity.")
 
 	logger.Info("Encrypting test message with public key entity.")
-	encryptedArmoredFilePart, err := Encrypt(pubEntity, unencryptedFilePart)
+	encryptedArmoredFilePart, err := Encrypt([]byte(passphrase), unencryptedFilePart)
 	if err != nil {
 		// handle error
 	}
