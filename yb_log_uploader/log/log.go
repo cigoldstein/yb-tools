@@ -1,28 +1,43 @@
 package log
 
 import (
+	"os"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"os"
 )
 
-func Log() zap.SugaredLogger {
+type Logger struct {
+	Args struct {
+		DebugFlag   bool
+		VerboseFlag bool
+	}
+}
+
+func CreateLogger(debugFlag bool, verboseFlag bool) zap.SugaredLogger {
+
 	config := zap.NewProductionEncoderConfig()
 	config.EncodeTime = zapcore.ISO8601TimeEncoder
+	config.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
+	var defaultConsoleLogLevel zapcore.Level
+
+	// configure verbosity and log-level
+	switch {
+	case debugFlag:
+		defaultConsoleLogLevel = zap.DebugLevel
+		config.FunctionKey = "true"
+	case verboseFlag:
+		defaultConsoleLogLevel = zap.InfoLevel
+		config.FunctionKey = "true"
+	default:
+		defaultConsoleLogLevel = zap.InfoLevel
+		config.TimeKey = ""
+		config.CallerKey = ""
+	}
 
 	consoleEncoder := zapcore.NewConsoleEncoder(config)
-	defaultConsoleLogLevel := zap.InfoLevel
-
-	fileEncoder := zapcore.NewConsoleEncoder(config)
-	defaultFileLogLevel := zap.DebugLevel
-	logFile, _ := os.OpenFile("text.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	writer := zapcore.AddSync(logFile)
-
-	core := zapcore.NewTee(
-		zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), defaultConsoleLogLevel),
-		zapcore.NewCore(fileEncoder, writer, defaultFileLogLevel),
-	)
-	logger := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
-
-	return *logger.Sugar()
+	core := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), defaultConsoleLogLevel)
+	zapNew := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.FatalLevel))
+	return *zapNew.Sugar()
 }
