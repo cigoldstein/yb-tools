@@ -5,56 +5,16 @@ package uploader
 
 import (
 	"bytes"
-	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"main/log"
-	"main/openpgp"
+	"main/structs"
 	"math"
-	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
-var logger = log.Log()
-var apiRequestInfo requestInfo
-var apiFileInfo fileInfo
-var apiPackageInfo packageInfo
-var apiUploadUrlInfo uploadUrlInfo
-
-type requestInfo struct {
-	url                string
-	ssApiKeyHeader     string
-	ssRequestApiHeader string
-}
-
-type packageInfo struct {
-	PackageID    string `json:"packageId"`
-	PackageCode  string `json:"packageCode"`
-	ServerSecret string `json:"serverSecret"`
-	Response     string `json:"response"`
-}
-
-type fileInfo struct {
-	FileID          string `json:"fileId"`
-	FileName        string `json:"fileName"`
-	FileSize        string `json:"fileSize"`
-	Parts           int    `json:"parts"`
-	FileUploaded    string `json:"fileUploaded"`
-	FileUploadedStr string `json:"fileUploadedStr"`
-	FileVersion     string `json:"fileVersion"`
-	CreatedByEmail  string `json:"createdByEmail"`
-	Response        string `json:"response"`
-	Message         string `json:"message"`
-}
-
-type uploadUrlInfo struct {
-	UploadUrls []struct {
-		Part int    `json:"part"`
-		URL  string `json:"url"`
-	} `json:"uploadUrls"`
-	Response string `json:"response"`
-}
+var Logger = log.CreateLogger(false, false)
 
 func createHttpPut() {
 
@@ -64,136 +24,20 @@ func createHttpPost() {
 
 }
 
-func createDropzonePackage() packageInfo {
-
-	apiRequestInfo.url = "https://secure-upload.yugabyte.com/drop-zone/v2.0/package/"
-
-	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodPut, apiRequestInfo.url, nil)
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("ss-api-key", apiRequestInfo.ssApiKeyHeader)
-	req.Header.Set("ss-request-api", apiRequestInfo.ssRequestApiHeader)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	var bodyJson packageInfo
-	err = json.Unmarshal(body, &bodyJson)
-
-	return bodyJson
-}
-
-func addFileToPackage() fileInfo {
-
-	apiRequestInfo.url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file", apiPackageInfo.PackageCode)
-
-	client := &http.Client{}
-
-	type reqBody struct {
-		Filename   string `json:"filename"`
-		UploadType string `json:"uploadType"`
-		Parts      int    `json:"parts"`
-		Filesize   int    `json:"filesize"`
-	}
-
-	rb := reqBody{
-		Filename:   "testfile.txt",
-		UploadType: "DROP_ZONE",
-		Parts:      2,
-		Filesize:   18,
-	}
-
-	rbJson, err := json.Marshal(rb)
-	if err != nil {
-		panic(err)
-	}
-
-	req, err := http.NewRequest(http.MethodPut, apiRequestInfo.url, bytes.NewBuffer(rbJson))
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("ss-api-key", apiRequestInfo.ssApiKeyHeader)
-	req.Header.Set("ss-request-api", apiRequestInfo.ssRequestApiHeader)
-	req.Header.Set("content-type", "application/json;charset=utf-8")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	var bodyJson fileInfo
-	err = json.Unmarshal(body, &bodyJson)
-	logger.Info(string(body))
-
-	return bodyJson
-}
-
-func getUploadUrls() uploadUrlInfo {
-
-	apiRequestInfo.url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-urls", apiPackageInfo.PackageCode, apiFileInfo.FileID)
-
-	client := &http.Client{}
-
-	type reqBody struct {
-		Part int `json:"part"`
-	}
-
-	rb := reqBody{
-		Part: 1,
-	}
-
-	rbJson, err := json.Marshal(rb)
-	if err != nil {
-		panic(err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, apiRequestInfo.url, bytes.NewBuffer(rbJson))
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("ss-api-key", apiRequestInfo.ssApiKeyHeader)
-	req.Header.Set("ss-request-api", apiRequestInfo.ssRequestApiHeader)
-	req.Header.Set("content-type", "application/json;charset=utf-8")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	var bodyJson uploadUrlInfo
-	err = json.Unmarshal(body, &bodyJson)
-	//logger.Info(string(body))
-
-	return bodyJson
-
-}
-
-func markPackageComplete() {
-
-}
-
-func chunkAndEncryptFiles() []string {
+func chunkAndEncryptFiles(path, fileName string, Uploader structs.Uploader) []string {
 
 	var fileNames []string
 
-	fileToChunk := "/home/craig/github/cigoldstein/yb-tools/yb_log_uploader/testfile.txt"
+	// hard code one file for now, will be a list coming from CLI
+	fileToChunk := filepath.Join(path, fileName)
 
-	logger.Info("File to chunk: ", fileToChunk)
+	// will be inaccurate until the hard-coded file above is removed
+	Logger.Debug("Files to chunk: ", Uploader.Args.FilesFlag)
 
 	file, err := os.Open(fileToChunk)
 
 	if err != nil {
-		logger.Error(err)
+		Logger.Error(err)
 		os.Exit(1)
 	}
 
@@ -203,13 +47,11 @@ func chunkAndEncryptFiles() []string {
 
 	var fileSize int64 = fileInfo.Size()
 
-	logger.Info(fileInfo, "|", fileSize)
-
-	const fileChunk = 2.5 * (1 << 20) // 1 MB, change this to your requirement
+	const fileChunk = 2.5 * (1 << 20)
 
 	totalPartsNum := uint64(math.Ceil(float64(fileSize) / float64(fileChunk)))
 
-	logger.Infof("Splitting to %d pieces.", totalPartsNum)
+	Logger.Infof("Splitting to %d pieces.", totalPartsNum)
 
 	for i := uint64(0); i < totalPartsNum; i++ {
 
@@ -223,20 +65,20 @@ func chunkAndEncryptFiles() []string {
 		_, err := os.Create(fileName)
 
 		if err != nil {
-			logger.Error(err)
+			Logger.Error(err)
 			os.Exit(1)
 		}
 
-		logger.Info("Name of file part: ", fileName)
+		Logger.Info("Name of file part: ", fileName)
 		// encrypt file part
 		//unencryptedFilePart, err := os.ReadFile(fileName)
 		//if err != nil {
-		//	logger.Error(err)
+		//	Logger.Error(err)
 		//	os.Exit(1)
 		//}
 
-		logger.Info("Encrypting partBuffer")
-		encryptedPartBufferReader, decryptedPartBuffer := openpgp.EncryptFileParts(partBuffer)
+		Logger.Info("Encrypting partBuffer")
+		encryptedPartBufferReader := EncryptFileParts(Uploader.PackageInfo.ServerSecret, Uploader.Secrets.ClientSecret, partBuffer)
 		buf := &bytes.Buffer{}
 		buf.ReadFrom(encryptedPartBufferReader)
 
@@ -245,103 +87,90 @@ func chunkAndEncryptFiles() []string {
 
 		fileNames = append(fileNames, fileName)
 
-		decryptedFileName := fileName + "_decrypted"
-		_, err = os.Create(decryptedFileName)
-
-		logger.Info("Writing decrypted file: ", decryptedFileName)
-		ioutil.WriteFile(decryptedFileName, decryptedPartBuffer, os.ModeAppend)
-
 	}
 
 	return fileNames
 
 }
 
-func uploadFilePartsToPackage(fileNames []string, urlInfo uploadUrlInfo) {
+//
+//func uploadFilePartsToPackage(fileNames []string, urlInfo uploadUrlInfo) {
+//
+//	Logger.Info("File parts to upload: ", fileNames)
+//
+//	for i, fileName := range fileNames {
+//		Logger.Info(i, " ", fileName)
+//		Logger.Info(urlInfo.UploadUrls[i].URL)
+//
+//		apiRequestInfo.url = fmt.Sprintf(urlInfo.UploadUrls[i].URL)
+//
+//		client := &http.Client{}
+//
+//		file, err := ioutil.ReadFile(fileName)
+//		rb := bytes.NewReader(file)
+//
+//		if err != nil {
+//			Logger.Error("unable to read file")
+//			os.Exit(1)
+//		}
+//
+//		req, err := http.NewRequest(http.MethodPut, "https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-1?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d5JgAAsR1hN8OIud5AKfYzfM6PQM%3D\"},{\"part\":2,\"url\":\"https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-2?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d%2FsX3Hrvg5HizfLtjTRaZ%2BjsC8zo%3D", rb)
+//		if err != nil {
+//			panic(err)
+//		}
+//		req.Header.Set("ss-api-key-header", apiRequestInfo.ssApiKeyHeader)
+//		req.Header.Set("ss-request-api-header", apiRequestInfo.ssRequestApiHeader)
+//
+//		resp, err := client.Do(req)
+//		if err != nil {
+//			panic(err)
+//		}
+//
+//		// TODO: returns a 200? lies.
+//		Logger.Info(resp.StatusCode, " | ", resp.Header)
+//
+//	}
+//}
 
-	logger.Info("File parts to upload: ", fileNames)
+func UploadLogs(args structs.Args) {
 
-	for i, fileName := range fileNames {
-		logger.Info(i, " ", fileName)
-		logger.Info(urlInfo.UploadUrls[i].URL)
+	filePath := "/home/craig/github/cigoldstein/yb-tools/yb_log_uploader"
+	fileName := "testfile.txt"
 
-		apiRequestInfo.url = fmt.Sprintf(urlInfo.UploadUrls[i].URL)
+	var Uploader structs.Uploader
 
-		client := &http.Client{}
+	Uploader.RequestInfo.SsApiKeyHeader = args.DropzoneIdFlag
+	Uploader.RequestInfo.SsRequestApiHeader = "DROP_ZONE"
 
-		file, err := ioutil.ReadFile(fileName)
-		rb := bytes.NewReader(file)
+	// Step 1: Create the dropzone package
+	Uploader.PackageInfo = createDropzonePackage(Uploader)
+	Logger.Debug("PackageInfo: ", Uploader.PackageInfo)
 
-		if err != nil {
-			logger.Error("unable to read file")
-			os.Exit(1)
-		}
+	// Now that we have the packageCode, we'll generate our clientSecret and checksum
+	Uploader.Secrets.ClientSecret = CreateClientSecret()
+	Uploader.Secrets.Checksum = CreateChecksum([]byte(Uploader.PackageInfo.PackageCode), []byte(Uploader.Secrets.ClientSecret))
 
-		req, err := http.NewRequest(http.MethodPut, "https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-1?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d5JgAAsR1hN8OIud5AKfYzfM6PQM%3D\"},{\"part\":2,\"url\":\"https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-2?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d%2FsX3Hrvg5HizfLtjTRaZ%2BjsC8zo%3D", rb)
-		if err != nil {
-			panic(err)
-		}
-		req.Header.Set("ss-api-key-header", apiRequestInfo.ssApiKeyHeader)
-		req.Header.Set("ss-request-api-header", apiRequestInfo.ssRequestApiHeader)
+	// This step submits information about the file to the SendSafely API
+	// The actual upload is performed later in the workflow
+	Uploader.FileInfo = addFileToPackage(fileName, Uploader)
+	Logger.Debug(Uploader.FileInfo)
 
-		resp, err := client.Do(req)
-		if err != nil {
-			panic(err)
-		}
+	Uploader.UploadUrlInfo = getUploadUrls(Uploader)
 
-		// TODO: returns a 200? lies.
-		logger.Info(resp.StatusCode, " | ", resp.Header)
+	fileNames := chunkAndEncryptFiles(filePath, fileName, Uploader)
 
-	}
-}
-
-func UploadLogs(caseNum int, email string, dropzoneId string, isDropzoneFlagChanged bool, files []string) {
-
-	apiRequestInfo.ssApiKeyHeader = dropzoneId
-	apiRequestInfo.ssRequestApiHeader = "DROP_ZONE"
-
-	// set the default here for now but maybe hardcode the dropzone id in the struct instead of cobra
-	//apiRequestInfo.ssApiKeyHeader := dropzoneId
-
-	//packageInfo := createDropzonePackage()
-
-	// hard code these values for testing so that we don't create a million empty packages
-	// packageInfo would normally be created by the "createDropzonePackage" function above
-	// packageInfo is a struct built from the HTTP json response of the api call
-	// the values below are actual values from a "createDropzonePackage" call
-	apiPackageInfo.PackageID = "X9V2-L8S1"
-	apiPackageInfo.PackageCode = "TWC3p9Sq8kyHDNceOl3pk59SvGqqVNiP1fNTFHNvZ00"
-	apiPackageInfo.ServerSecret = "ABSEtmVjrkwKsuH7qrbRJr61O5BX76dumg"
-	apiPackageInfo.Response = "SUCCESS"
-
-	// fileInfo := addFileToPackage()
-
-	// dump struct
-	// logger.Infof("%+v\n", fileInfo)
-
-	// hard code fileInfo for now, similar to packageInfo
-	apiFileInfo.FileID = "72448c21-54b7-41b9-93e1-8a6406933f8a"
-	apiFileInfo.FileName = "testfile.txt"
-	apiFileInfo.FileSize = "18"
-	apiFileInfo.Parts = 2
-	apiFileInfo.FileUploaded = "Aug 19, 2022 1:03:38 AM"
-	apiFileInfo.FileUploadedStr = "Thu Aug 18 at 21:03 (EDT)"
-	apiFileInfo.FileVersion = "1"
-	apiFileInfo.FileVersion = "1"
-	apiFileInfo.CreatedByEmail = "Anonymous Recipient"
-	apiFileInfo.Response = "SUCCESS"
-	apiFileInfo.Message = "c164b143-db33-436d-ab1c-75809a640dc4"
-
-	urlInfo := getUploadUrls()
-	//logger.Infof("%+v\n", urlInfo)
-
-	//generateKeyPair()
-
-	fileNames := chunkAndEncryptFiles()
+	Logger.Debug("fileNames: ", fileNames)
 
 	//var fileNames []string
 	//fileNames = append(fileNames, "split_files/testfile.txt_0", "split_files/testfile.txt_1")
 
-	uploadFilePartsToPackage(fileNames, urlInfo)
+	uploadFilePartsToPackage(Uploader, fileNames)
 
+	markPackageComplete(Uploader)
+
+	Uploader.FinalizeInfo = finalizePackage(Uploader)
+
+	Uploader.HostedDropzoneInfo = submitHostedDropzone(Uploader.PackageInfo.PackageCode)
+
+	Logger.Info("Done")
 }

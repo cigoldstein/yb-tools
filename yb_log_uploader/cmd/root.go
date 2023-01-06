@@ -4,23 +4,21 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"main/log"
+	"main/structs"
 	"main/uploader"
 	"os"
 )
 
-var logger = log.Log()
+var Args structs.Args
 
-var filesFlag []string
-var caseNumFlag int = 0
-var emailFlag string
-var dropzoneIdFlag string
+var Logger = log.CreateLogger(false, false)
 
 var rootCmd = &cobra.Command{
 	Use:   "yb_log_uploader",
 	Short: "utility to upload logs to yugabyte support",
 	Run: func(cmd *cobra.Command, args []string) {
-		isDropzoneFlagChanged := cmd.Flags().Changed("dropzone_id")
-		uploader.UploadLogs(caseNumFlag, emailFlag, dropzoneIdFlag, isDropzoneFlagChanged, filesFlag)
+		Args.IsDropzoneFlagChanged = cmd.Flags().Changed("dropzone_id")
+		uploader.UploadLogs(Args)
 	},
 }
 
@@ -36,10 +34,11 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringSliceVarP(&filesFlag, "files", "f", nil, "List of files to upload")
-	rootCmd.Flags().IntVarP(&caseNumFlag, "case_num", "c", 0, "Zendesk case number to attach files to (required)")
-	rootCmd.Flags().StringVarP(&emailFlag, "email", "e", "", "Email address of submitter (required)")
-	rootCmd.Flags().StringVar(&dropzoneIdFlag, "dropzone_id", "S4dsLt2meOtq1iWgBhqJYsuEe2nzvYuv03j_Y6LqhY0", "Override default dropzone ID")
+	Logger.Info("Processing command line arguments")
+	rootCmd.Flags().StringSliceVarP(&Args.FilesFlag, "files", "f", nil, "List of files to upload")
+	rootCmd.Flags().IntVarP(&Args.CaseNumFlag, "case_num", "c", 0, "Zendesk case number to attach files to (required)")
+	rootCmd.Flags().StringVarP(&Args.EmailFlag, "email", "e", "", "Email address of submitter (required)")
+	rootCmd.Flags().StringVar(&Args.DropzoneIdFlag, "dropzone_id", "BdFZz_JoZqtqPVueANkspD86KZ_PJsW1kIf_jVHeCO0", "Override default dropzone ID")
 
 	rootCmd.MarkFlagRequired("case_num")
 	rootCmd.MarkFlagRequired("email")

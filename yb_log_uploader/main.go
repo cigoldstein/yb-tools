@@ -6,16 +6,12 @@ import (
 	"time"
 )
 
-var logger = log.Log()
-
-func init() {
-}
+var Logger = log.CreateLogger(false, false)
 
 func main() {
 	start := time.Now()
-	logger.Info("Starting log upload")
 
 	cmd.Execute()
 
-	logger.Info("Execution time: ", time.Since(start))
+	Logger.Info("Execution time: ", time.Since(start))
 }
