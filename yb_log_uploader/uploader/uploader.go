@@ -61,7 +61,7 @@ func chunkAndEncryptFiles(path, fileName string, Uploader structs.Uploader) []st
 		file.Read(partBuffer)
 
 		// write to disk
-		fileName := "split_files/testfile.txt_" + strconv.FormatUint(i, 10)
+		fileName := "split_files/testfile.txt_" + strconv.FormatUint(i+1, 10)
 		_, err := os.Create(fileName)
 
 		if err != nil {

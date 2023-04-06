@@ -24,6 +24,8 @@ func CreateClientSecret() string {
 	rand.Read(token)
 	fmt.Println(token)
 	clientSecret := base64.RawURLEncoding.EncodeToString(token)
+	fmt.Println("clientSecret")
+	fmt.Println(clientSecret)
 	return clientSecret
 }
 
@@ -82,7 +84,7 @@ func Encrypt(passphrase []byte, message []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func EncryptFileParts(clientSecret, serverSecret string, unencryptedFilePart []uint8) io.Reader {
+func EncryptFileParts(serverSecret, clientSecret string, unencryptedFilePart []uint8) io.Reader {
 
 	passphrase := serverSecret + clientSecret
 

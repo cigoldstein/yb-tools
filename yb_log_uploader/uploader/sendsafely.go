@@ -131,9 +131,10 @@ func uploadFilePartsToPackage(uploader structs.Uploader, fileNames []string) {
 	Logger.Info("Uploading ", uploader.FileInfo.Parts, " file parts")
 	client := &http.Client{}
 
-	for i, uploadUrl := range uploader.UploadUrlInfo.UploadUrls {
+	for _, uploadUrl := range uploader.UploadUrlInfo.UploadUrls {
 
-		filePart, err := os.ReadFile(fileNames[i])
+		// TODO: change fileParts from list to a map with part:file instead of relying on slice index
+		filePart, err := os.ReadFile(fileNames[uploadUrl.Part-1])
 
 		req, err := http.NewRequest(http.MethodPut, uploadUrl.URL, bytes.NewBuffer(filePart))
 		if err != nil {
@@ -152,7 +153,6 @@ func uploadFilePartsToPackage(uploader structs.Uploader, fileNames []string) {
 		var bodyJson structs.UploadUrlInfo
 		err = json.Unmarshal(body, &bodyJson)
 		Logger.Info("Body: ", string(body))
-
 	}
 }
 
@@ -160,6 +160,7 @@ func markPackageComplete(Uploader structs.Uploader) {
 	client := &http.Client{}
 
 	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-complete", Uploader.PackageInfo.PackageCode, Uploader.FileInfo.FileID)
+	Logger.Info("packageCode", Uploader.PackageInfo.PackageCode)
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 
