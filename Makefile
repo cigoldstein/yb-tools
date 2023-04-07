@@ -1,6 +1,6 @@
 include global.mk
 
-YBTOOLS = pkg ycrc yugatool yugaware-client
+YBTOOLS = pkg ycrc yugatool yugaware-client yb-support-tool
 
 all: ${YBTOOLS}
 
