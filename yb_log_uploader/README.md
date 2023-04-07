@@ -13,3 +13,15 @@ https://github.com/golang/go/issues/44226
 `yb_log_uploader` uses a fork of Go's openpgp library:
 
 https://github.com/ProtonMail/gopenpgp
+
+
+## TODO
+
+- concurrency for uploads?
+- remove hardcoding of number of parts/
+- check space on file system to make sure there is room for temporary split files
+- add flag for temporary output location (/tmp by default?)
+- check to make sure total files for entire package are 100 GB or less
+  - for now, simply error out and provide a command to split?
+  - long term, split the files automatically
+- debug logging flag

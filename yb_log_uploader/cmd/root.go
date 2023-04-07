@@ -38,9 +38,15 @@ func init() {
 	rootCmd.Flags().StringSliceVarP(&Args.FilesFlag, "files", "f", nil, "List of files to upload")
 	rootCmd.Flags().IntVarP(&Args.CaseNumFlag, "case_num", "c", 0, "Zendesk case number to attach files to (required)")
 	rootCmd.Flags().StringVarP(&Args.EmailFlag, "email", "e", "", "Email address of submitter (required)")
+
+	// default dropzone ID is set to Yugabyte Support's anonymous dropzone
+	// this can be overridden with the --dropzone_id flag
 	rootCmd.Flags().StringVar(&Args.DropzoneIdFlag, "dropzone_id", "BdFZz_JoZqtqPVueANkspD86KZ_PJsW1kIf_jVHeCO0", "Override default dropzone ID")
 
+	rootCmd.MarkFlagRequired("files")
 	rootCmd.MarkFlagRequired("case_num")
 	rootCmd.MarkFlagRequired("email")
+
+	// hide the dropzone_id flag from the help menu
 	rootCmd.Flags().MarkHidden("dropzone_id")
 }

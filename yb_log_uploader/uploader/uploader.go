@@ -1,8 +1,5 @@
 package uploader
 
-// TODO: create a "createHttpClient function so that there's less reused code on api calls
-// TODO: break structs out into separate file
-
 import (
 	"bytes"
 	"io/ioutil"
@@ -16,25 +13,11 @@ import (
 
 var Logger = log.CreateLogger(false, false)
 
-func createHttpPut() {
-
-}
-
-func createHttpPost() {
-
-}
-
-func chunkAndEncryptFiles(path, fileName string, Uploader structs.Uploader) []string {
+func chunkAndEncryptFiles(fileName string, uploader *structs.Uploader) []string {
 
 	var fileNames []string
 
-	// hard code one file for now, will be a list coming from CLI
-	fileToChunk := filepath.Join(path, fileName)
-
-	// will be inaccurate until the hard-coded file above is removed
-	Logger.Debug("Files to chunk: ", Uploader.Args.FilesFlag)
-
-	file, err := os.Open(fileToChunk)
+	file, err := os.Open(fileName)
 
 	if err != nil {
 		Logger.Error(err)
@@ -43,134 +26,93 @@ func chunkAndEncryptFiles(path, fileName string, Uploader structs.Uploader) []st
 
 	defer file.Close()
 
+	// stat the file so we can access properties of the file
 	fileInfo, _ := file.Stat()
-
 	var fileSize int64 = fileInfo.Size()
 
-	const fileChunk = 2.5 * (1 << 20)
+	// pick a file size and number of parts to divide it into.
+	// we can add concurrency later to upload multiple parts at once
+	// currently using 2.5 MB slices since that's what the sendsafely doc recommends, but this will definitely need to be adjust into much larger slices
+	const fileChunkSize = 2.5 * (1 << 20)
 
-	totalPartsNum := uint64(math.Ceil(float64(fileSize) / float64(fileChunk)))
+	// determine how many parts we'll need to chunk the file into based on the defined fileChunkSize
+	totalPartNum := uint64(math.Ceil(float64(fileSize) / float64(fileChunkSize)))
 
-	Logger.Infof("Splitting to %d pieces.", totalPartsNum)
+	Logger.Infof("Splitting to %d pieces.", totalPartNum)
 
-	for i := uint64(0); i < totalPartsNum; i++ {
+	// split files into "totalPartsNum" number of files
+	for i := uint64(0); i < totalPartNum; i++ {
 
-		partSize := int(math.Min(fileChunk, float64(fileSize-int64(i*fileChunk))))
+		partSize := int(math.Min(fileChunkSize, float64(fileSize-int64(i*fileChunkSize))))
 		partBuffer := make([]byte, partSize)
-
 		file.Read(partBuffer)
 
-		// write to disk
-		fileName := "split_files/testfile.txt_" + strconv.FormatUint(i+1, 10)
-		_, err := os.Create(fileName)
+		// write to disk and append the loop counter to each file part
+		// hard coded for testing
+		//outFileName := "split_files/testfile.txt_" + strconv.FormatUint(i+1, 10)
+		outFileName := "split_files/" + filepath.Base(fileName) + "_" + strconv.FormatUint(i, 10)
+		_, err := os.Create(outFileName)
 
 		if err != nil {
 			Logger.Error(err)
 			os.Exit(1)
 		}
 
-		Logger.Info("Name of file part: ", fileName)
-		// encrypt file part
-		//unencryptedFilePart, err := os.ReadFile(fileName)
-		//if err != nil {
-		//	Logger.Error(err)
-		//	os.Exit(1)
-		//}
-
+		Logger.Info("Name of file part: ", outFileName)
 		Logger.Info("Encrypting partBuffer")
-		encryptedPartBufferReader := EncryptFileParts(Uploader.PackageInfo.ServerSecret, Uploader.Secrets.ClientSecret, partBuffer)
+		encryptedPartBufferReader := EncryptFileParts(uploader.PackageInfo.ServerSecret, uploader.Secrets.ClientSecret, partBuffer)
 		buf := &bytes.Buffer{}
 		buf.ReadFrom(encryptedPartBufferReader)
 
 		// write/save buffer to disk
-		ioutil.WriteFile(fileName, buf.Bytes(), os.ModeAppend)
+		ioutil.WriteFile(outFileName, buf.Bytes(), os.ModeAppend)
 
-		fileNames = append(fileNames, fileName)
-
+		fileNames = append(fileNames, outFileName)
+		uploader.FileInfo.Parts = int(totalPartNum)
 	}
 
 	return fileNames
 
 }
 
-//
-//func uploadFilePartsToPackage(fileNames []string, urlInfo uploadUrlInfo) {
-//
-//	Logger.Info("File parts to upload: ", fileNames)
-//
-//	for i, fileName := range fileNames {
-//		Logger.Info(i, " ", fileName)
-//		Logger.Info(urlInfo.UploadUrls[i].URL)
-//
-//		apiRequestInfo.url = fmt.Sprintf(urlInfo.UploadUrls[i].URL)
-//
-//		client := &http.Client{}
-//
-//		file, err := ioutil.ReadFile(fileName)
-//		rb := bytes.NewReader(file)
-//
-//		if err != nil {
-//			Logger.Error("unable to read file")
-//			os.Exit(1)
-//		}
-//
-//		req, err := http.NewRequest(http.MethodPut, "https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-1?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d5JgAAsR1hN8OIud5AKfYzfM6PQM%3D\"},{\"part\":2,\"url\":\"https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/42a3ddc4-66df-4a08-a7b3-c8e4c9b7fb77-2?AWSAccessKeyId\\u003dAKIAJNE5FSA2YFQP4BDA\\u0026Expires\\u003d1661265995\\u0026Signature\\u003d%2FsX3Hrvg5HizfLtjTRaZ%2BjsC8zo%3D", rb)
-//		if err != nil {
-//			panic(err)
-//		}
-//		req.Header.Set("ss-api-key-header", apiRequestInfo.ssApiKeyHeader)
-//		req.Header.Set("ss-request-api-header", apiRequestInfo.ssRequestApiHeader)
-//
-//		resp, err := client.Do(req)
-//		if err != nil {
-//			panic(err)
-//		}
-//
-//		// TODO: returns a 200? lies.
-//		Logger.Info(resp.StatusCode, " | ", resp.Header)
-//
-//	}
-//}
-
 func UploadLogs(args structs.Args) {
-
-	filePath := "/home/craig/github/cigoldstein/yb-tools/yb_log_uploader"
-	fileName := "testfile.txt"
 
 	var Uploader structs.Uploader
 
 	Uploader.RequestInfo.SsApiKeyHeader = args.DropzoneIdFlag
 	Uploader.RequestInfo.SsRequestApiHeader = "DROP_ZONE"
 
-	// Step 1: Create the dropzone package
-	Uploader.PackageInfo = createDropzonePackage(Uploader)
-	Logger.Debug("PackageInfo: ", Uploader.PackageInfo)
+	// Step 1 - Create a new Dropzone Package
+	createDropzonePackage(&Uploader)
 
-	// Now that we have the packageCode, we'll generate our clientSecret and checksum
-	Uploader.Secrets.ClientSecret = CreateClientSecret()
-	Uploader.Secrets.Checksum = CreateChecksum([]byte(Uploader.PackageInfo.PackageCode), []byte(Uploader.Secrets.ClientSecret))
+	// Generate clientSecret and checksum
+	CreateClientSecret(&Uploader)
+	CreateChecksum(&Uploader)
 
-	// This step submits information about the file to the SendSafely API
-	// The actual upload is performed later in the workflow
-	Uploader.FileInfo = addFileToPackage(fileName, Uploader)
-	Logger.Debug(Uploader.FileInfo)
+	for _, fileName := range args.FilesFlag {
 
-	Uploader.UploadUrlInfo = getUploadUrls(Uploader)
+		// Step 2 - Add a File to the Package
+		// This step submits metadata about the file(s) to the SendSafely API
+		// The actual upload is performed later in the workflow
+		addFileToPackage(fileName, &Uploader)
 
-	fileNames := chunkAndEncryptFiles(filePath, fileName, Uploader)
+		// Step 3 - Obtain the Upload URLs for each File Part
+		getUploadUrls(&Uploader)
 
-	Logger.Debug("fileNames: ", fileNames)
+		// Step 4 - Encrypt and Upload each File Part
+		// Files will be split, encrypted, and uploaded
+		fileNames := chunkAndEncryptFiles(fileName, &Uploader)
+		uploadFilePartsToPackage(fileNames, &Uploader)
 
-	//var fileNames []string
-	//fileNames = append(fileNames, "split_files/testfile.txt_0", "split_files/testfile.txt_1")
+		// Step 5 - Mark the Upload as Complete
+		markPackageComplete(&Uploader)
 
-	uploadFilePartsToPackage(Uploader, fileNames)
+		// Step 6 - Finalize the Package
+		finalizePackage(&Uploader)
 
-	markPackageComplete(Uploader)
+		// Step 7 - Invoke the Hosted Dropzone Submission Endpoint
+		submitHostedDropzone(&Uploader)
 
-	Uploader.FinalizeInfo = finalizePackage(Uploader)
-
-	Uploader.HostedDropzoneInfo = submitHostedDropzone(Uploader.PackageInfo.PackageCode)
-
-	Logger.Info("Done")
+		Logger.Info("Done")
+	}
 }

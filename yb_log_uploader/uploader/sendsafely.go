@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-func createDropzonePackage(Uploader structs.Uploader) structs.PackageInfo {
+func createDropzonePackage(Uploader *structs.Uploader) {
 
 	Uploader.RequestInfo.Url = "https://secure-upload.yugabyte.com/drop-zone/v2.0/package/"
 
@@ -35,12 +36,12 @@ func createDropzonePackage(Uploader structs.Uploader) structs.PackageInfo {
 	err = json.Unmarshal(body, &bodyJson)
 
 	// this returns to Uploader.PackageInfo
-	return bodyJson
+	Uploader.PackageInfo = bodyJson
 }
 
-func addFileToPackage(fileName string, Uploader structs.Uploader) structs.FileInfo {
+func addFileToPackage(fileName string, uploader *structs.Uploader) {
 
-	Uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file", Uploader.PackageInfo.PackageCode)
+	uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file", uploader.PackageInfo.PackageCode)
 
 	client := &http.Client{}
 
@@ -52,10 +53,12 @@ func addFileToPackage(fileName string, Uploader structs.Uploader) structs.FileIn
 	}
 
 	rb := reqBody{
-		Filename:   fileName,
+		Filename:   filepath.Base(fileName),
 		UploadType: "DROP_ZONE",
-		Parts:      4,
-		Filesize:   3550775,
+
+		// TODO: need to make these dynamic based on the file sizes
+		Parts:    4,
+		Filesize: 3550775,
 	}
 
 	rbJson, err := json.Marshal(rb)
@@ -63,12 +66,12 @@ func addFileToPackage(fileName string, Uploader structs.Uploader) structs.FileIn
 		panic(err)
 	}
 
-	req, err := http.NewRequest(http.MethodPut, Uploader.RequestInfo.Url, bytes.NewBuffer(rbJson))
+	req, err := http.NewRequest(http.MethodPut, uploader.RequestInfo.Url, bytes.NewBuffer(rbJson))
 	if err != nil {
 		panic(err)
 	}
-	req.Header.Set("ss-api-key", Uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", Uploader.RequestInfo.SsRequestApiHeader)
+	req.Header.Set("ss-api-key", uploader.RequestInfo.SsApiKeyHeader)
+	req.Header.Set("ss-request-api", uploader.RequestInfo.SsRequestApiHeader)
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	resp, err := client.Do(req)
@@ -80,23 +83,22 @@ func addFileToPackage(fileName string, Uploader structs.Uploader) structs.FileIn
 
 	var bodyJson structs.FileInfo
 	err = json.Unmarshal(body, &bodyJson)
-	Logger.Info(string(body))
 
 	// returns to Uploader.FileInfo
-	return bodyJson
+	uploader.FileInfo = bodyJson
 }
 
-func getUploadUrls(Uploader structs.Uploader) structs.UploadUrlInfo {
+func getUploadUrls(uploader *structs.Uploader) {
 
-	Uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-urls", Uploader.PackageInfo.PackageCode, Uploader.FileInfo.FileID)
+	uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-urls", uploader.PackageInfo.PackageCode, uploader.FileInfo.FileID)
 
 	client := &http.Client{}
 
 	rb := structs.RequestBody{
-		FileName:   Uploader.Args.FilesFlag,
+		FileName:   uploader.Args.FilesFlag,
 		UploadType: "DROP_ZONE",
-		Part:       Uploader.FileInfo.Parts,
-		FileSize:   Uploader.FileInfo.FileSize,
+		Part:       uploader.FileInfo.Parts,
+		FileSize:   uploader.FileInfo.FileSize,
 	}
 
 	rbJson, err := json.Marshal(rb)
@@ -104,12 +106,12 @@ func getUploadUrls(Uploader structs.Uploader) structs.UploadUrlInfo {
 		panic(err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, Uploader.RequestInfo.Url, bytes.NewBuffer(rbJson))
+	req, err := http.NewRequest(http.MethodPost, uploader.RequestInfo.Url, bytes.NewBuffer(rbJson))
 	if err != nil {
 		panic(err)
 	}
-	req.Header.Set("ss-api-key", Uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", Uploader.RequestInfo.SsRequestApiHeader)
+	req.Header.Set("ss-api-key", uploader.RequestInfo.SsApiKeyHeader)
+	req.Header.Set("ss-request-api", uploader.RequestInfo.SsRequestApiHeader)
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	resp, err := client.Do(req)
@@ -121,19 +123,19 @@ func getUploadUrls(Uploader structs.Uploader) structs.UploadUrlInfo {
 
 	var bodyJson structs.UploadUrlInfo
 	err = json.Unmarshal(body, &bodyJson)
-	Logger.Debug("Body: ", string(body))
 
-	return bodyJson
+	uploader.UploadUrlInfo = bodyJson
 
 }
 
-func uploadFilePartsToPackage(uploader structs.Uploader, fileNames []string) {
+func uploadFilePartsToPackage(fileNames []string, uploader *structs.Uploader) {
 	Logger.Info("Uploading ", uploader.FileInfo.Parts, " file parts")
 	client := &http.Client{}
 
 	for _, uploadUrl := range uploader.UploadUrlInfo.UploadUrls {
 
-		// TODO: change fileParts from list to a map with part:file instead of relying on slice index
+		Logger.Info("fileNames[uploadUrl.Part-1]", fileNames[uploadUrl.Part-1])
+
 		filePart, err := os.ReadFile(fileNames[uploadUrl.Part-1])
 
 		req, err := http.NewRequest(http.MethodPut, uploadUrl.URL, bytes.NewBuffer(filePart))
@@ -152,20 +154,18 @@ func uploadFilePartsToPackage(uploader structs.Uploader, fileNames []string) {
 
 		var bodyJson structs.UploadUrlInfo
 		err = json.Unmarshal(body, &bodyJson)
-		Logger.Info("Body: ", string(body))
 	}
 }
 
-func markPackageComplete(Uploader structs.Uploader) {
+func markPackageComplete(uploader *structs.Uploader) {
 	client := &http.Client{}
 
-	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-complete", Uploader.PackageInfo.PackageCode, Uploader.FileInfo.FileID)
-	Logger.Info("packageCode", Uploader.PackageInfo.PackageCode)
+	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-complete", uploader.PackageInfo.PackageCode, uploader.FileInfo.FileID)
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 
-	req.Header.Set("ss-api-key", Uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", Uploader.RequestInfo.SsRequestApiHeader)
+	req.Header.Set("ss-api-key", uploader.RequestInfo.SsApiKeyHeader)
+	req.Header.Set("ss-request-api", uploader.RequestInfo.SsRequestApiHeader)
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	if err != nil {
@@ -185,7 +185,7 @@ func markPackageComplete(Uploader structs.Uploader) {
 
 }
 
-func finalizePackage(uploader structs.Uploader) structs.FinalizeInfo {
+func finalizePackage(uploader *structs.Uploader) {
 	client := &http.Client{}
 
 	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/finalize", uploader.PackageInfo.PackageCode)
@@ -225,17 +225,18 @@ func finalizePackage(uploader structs.Uploader) structs.FinalizeInfo {
 
 	var bodyJson structs.FinalizeInfo
 	err = json.Unmarshal(body, &bodyJson)
-	Logger.Info("Body: ", bodyJson)
 
-	return bodyJson
+	uploader.FinalizeInfo = bodyJson
+
+	Logger.Info("Please use the following secure link to access your file(s): ", uploader.FinalizeInfo.Message+"#keyCode="+uploader.Secrets.ClientSecret)
 
 }
 
-func submitHostedDropzone(packageCode string) structs.HostedDropzoneInfo {
+func submitHostedDropzone(uploader *structs.Uploader) {
 	dropzoneData := url.Values{}
 	dropzoneData.Set("name", "4095")
 	dropzoneData.Set("email", "cgoldstein@yugabyte.com")
-	dropzoneData.Set("packageCode", packageCode)
+	dropzoneData.Set("packageCode", uploader.PackageInfo.PackageCode)
 	dropzoneData.Set("publicApiKey", "BdFZz_JoZqtqPVueANkspD86KZ_PJsW1kIf_jVHeCO0")
 
 	encodedDzData := dropzoneData.Encode()
@@ -262,6 +263,5 @@ func submitHostedDropzone(packageCode string) structs.HostedDropzoneInfo {
 	err = json.Unmarshal(body, &bodyJson)
 	Logger.Info("submitDZBody: ", bodyJson)
 
-	return bodyJson
-
+	uploader.HostedDropzoneInfo = bodyJson
 }
