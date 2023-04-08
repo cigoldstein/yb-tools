@@ -8,9 +8,6 @@ all: ${YBTOOLS}
 ${YBTOOLS}:
 	${MAKE} -C $@
 
-clean:
-	rm -rf bin/
-	rm -rf out/
 
 .PHONY: integration
 integration: ginkgo

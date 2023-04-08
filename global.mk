@@ -15,9 +15,13 @@ ${GOBIN_DIR}:
 ${OUT_DIR}/creds: ${OUT_DIR}
 	@mkdir -p ${OUT_DIR}/creds
 
+clean:
+	rm -rf bin/
+	rm -rf out/
+
 # Run tests
 test: fmt vet lint
-	go test ./... -coverprofile cover.out
+	go test -v ./... -coverprofile cover.out
 
 lint: tools
 	golangci-lint run

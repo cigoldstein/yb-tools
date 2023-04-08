@@ -58,6 +58,14 @@ func (u *Uploader) sendRequest(method, endpoint string, body []byte) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("Invalid HTTP Status Code: %d; Unable to read response body", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("Invalid HTTP status response; HTTP Error code %d; request body %s", resp.StatusCode, string(respBody))
+	}
 	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)

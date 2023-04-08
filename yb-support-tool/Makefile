@@ -22,5 +22,3 @@ ${BIN_DIR}/${BIN_NAME}:
 	-X 'github.com/yugabyte/yb-tools/yb-support-tool/cmd.Version=${VERSION}'"
 
 
-test:
-	go test -v ./...
