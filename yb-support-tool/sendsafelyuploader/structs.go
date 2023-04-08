@@ -1,20 +1,9 @@
 package sendsafelyuploader
 
-type Uploader struct {
-	Args               Args
-	RequestInfo        RequestInfo
-	PackageInfo        PackageInfo
-	FileInfo           FileInfo
-	UploadUrlInfo      UploadUrlInfo
-	FinalizeInfo       FinalizeInfo
-	HostedDropzoneInfo HostedDropzoneInfo
-	Secrets            Secrets
-}
-
 type RequestInfo struct {
 	Url                string
-	SsApiKeyHeader     string
-	SsRequestApiHeader string
+	SsApiKey           string
+	SsRequestApiTarget string
 }
 
 type Args struct {

@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
-	"time"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
@@ -19,22 +18,25 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-func CreateClientSecret(uploader *Uploader) {
+func createClientSecret() string {
 
-	rand.Seed(time.Now().UnixNano())
 	token := make([]byte, 32)
-	rand.Read(token)
-	uploader.Secrets.ClientSecret = base64.RawURLEncoding.EncodeToString(token)
+	if _, err := rand.Read(token); err != nil {
+		panic(err)
+
+	}
+
+	return base64.RawURLEncoding.EncodeToString(token)
 
 }
 
-func CreateChecksum(uploader *Uploader) {
+func (u *Uploader) CreateChecksum() {
 
 	//packageCode := []byte("og089z0ja3Ti6mTFCHIrrR3EXErmC01e0ukrA0EaWu0")
 	//clientSecret := []byte("JoGe9M6DRXcvdhfjK3ggQLvNZKsE3b1kgGP6dAEmJlM")
 
-	dk := pbkdf2.Key([]byte(uploader.Secrets.ClientSecret), []byte(uploader.PackageInfo.PackageCode), 1024, 32, sha256.New)
-	uploader.Secrets.Checksum = hex.EncodeToString(dk)
+	dk := pbkdf2.Key([]byte(u.ClientSecret), []byte(u.PackageInfo.PackageCode), 1024, 32, sha256.New)
+	u.Checksum = hex.EncodeToString(dk)
 }
 
 func Encrypt(passphrase []byte, message []byte) ([]byte, error) {

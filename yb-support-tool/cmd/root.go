@@ -13,9 +13,16 @@ import (
 
 var Logger = CreateLogger(false, false)
 
-var Verion = "pre-release"
+var Version = "pre-release"
 
 var Args uploader.Args
+
+// globals
+
+var (
+	dropzoneUrl   = "https://secure-upload.yugabyte.com/drop-zone/v2.0/package/"
+	SSUploaderURL = "https://secure-upload.yugabyte.com"
+)
 
 var (
 	rootCmd = &cobra.Command{
@@ -29,6 +36,13 @@ var (
 		Run: func(cmd *cobra.Command, args []string) {
 			Args.IsDropzoneFlagChanged = cmd.Flags().Changed("dropzone_id")
 			uploader.UploadLogs(Args)
+		},
+	}
+	versionCmd = &cobra.Command{
+		Use: "version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(Version)
+			os.Exit(0)
 		},
 	}
 )
@@ -52,6 +66,7 @@ func init() {
 
 	//subcommands
 	rootCmd.AddCommand(uploadCmd)
+	rootCmd.AddCommand(versionCmd)
 
 	// upload command flags
 	uploadCmd.Flags().StringSliceVarP(&Args.FilesFlag, "files", "f", nil, "List of files to upload")

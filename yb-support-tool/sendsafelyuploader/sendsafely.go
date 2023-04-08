@@ -13,38 +13,75 @@ import (
 	"strings"
 )
 
-func createDropzonePackage(Uploader *Uploader) {
+type Uploader struct {
+	// TODO PULL args into their own inputs to the uploader via setter / getter
+	Args             Args
+	URL              string
+	APIKey           string
+	RequestApiTarget string
+	ClientSecret     string
+	Checksum         string
 
-	Uploader.RequestInfo.Url = "https://secure-upload.yugabyte.com/drop-zone/v2.0/package/"
+	PackageInfo        PackageInfo
+	FileInfo           FileInfo
+	UploadUrlInfo      UploadUrlInfo
+	FinalizeInfo       FinalizeInfo
+	HostedDropzoneInfo HostedDropzoneInfo
+}
 
+func CreateUploader(SSUrl, SSAPIKey, SSRequestTarget string) *Uploader {
+	u := Uploader{URL: SSUrl,
+		APIKey:           SSAPIKey,
+		RequestApiTarget: SSRequestTarget,
+		ClientSecret:     createClientSecret(),
+	}
+	return &u
+}
+
+// uses uploader credentials to send the provided body to the provided enpoint
+// returns the response body as an array of bytes and any errors
+func (u *Uploader) sendRequest(method, endpoint string, body []byte) ([]byte, error) {
 	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodPut, Uploader.RequestInfo.Url, nil)
+	req, err := http.NewRequest(method, u.URL+endpoint, bytes.NewBuffer(body))
 	if err != nil {
 		panic(err)
 	}
-	req.Header.Set("ss-api-key", Uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", Uploader.RequestInfo.SsRequestApiHeader)
+	req.Header.Set("ss-api-key", u.APIKey)
+	req.Header.Set("ss-request-api", u.RequestApiTarget)
+
+	// TODO - does this need to be set only sometimes?
+	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	return ioutil.ReadAll(resp.Body)
 
-	var bodyJson PackageInfo
-	err = json.Unmarshal(body, &bodyJson)
-
-	// this returns to Uploader.PackageInfo
-	Uploader.PackageInfo = bodyJson
 }
 
-func addFileToPackage(fileName string, uploader *Uploader) {
+func (u *Uploader) createDropzonePackage() error {
 
-	uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file", uploader.PackageInfo.PackageCode)
+	endpoint := "drop-zone/v2.0/package/"
 
-	client := &http.Client{}
+	body, err := u.sendRequest(http.MethodPut, endpoint, nil)
+	if err != nil {
+		return err
+	}
 
+	if err := json.Unmarshal(body, &u.PackageInfo); err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func (u *Uploader) addFileToPackage(fileName string) error {
+
+	endpoint := fmt.Sprintf("drop-zone/v2.0/package/%s/file", u.PackageInfo.PackageCode)
+
+	//todo pull out to main body
 	type reqBody struct {
 		Filename   string `json:"filename"`
 		UploadType string `json:"uploadType"`
@@ -63,42 +100,30 @@ func addFileToPackage(fileName string, uploader *Uploader) {
 
 	rbJson, err := json.Marshal(rb)
 	if err != nil {
-		panic(err)
+		return (err)
 	}
 
-	req, err := http.NewRequest(http.MethodPut, uploader.RequestInfo.Url, bytes.NewBuffer(rbJson))
+	body, err := u.sendRequest(http.MethodPut, endpoint, rbJson)
 	if err != nil {
-		panic(err)
+		return (err)
 	}
-	req.Header.Set("ss-api-key", uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", uploader.RequestInfo.SsRequestApiHeader)
-	req.Header.Set("content-type", "application/json;charset=utf-8")
 
-	resp, err := client.Do(req)
+	err = json.Unmarshal(body, &u.FileInfo)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	var bodyJson FileInfo
-	err = json.Unmarshal(body, &bodyJson)
-
-	// returns to Uploader.FileInfo
-	uploader.FileInfo = bodyJson
+	return nil
 }
 
-func getUploadUrls(uploader *Uploader) {
+func (u *Uploader) getUploadUrls() error {
 
-	uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-urls", uploader.PackageInfo.PackageCode, uploader.FileInfo.FileID)
-
-	client := &http.Client{}
+	endpoint := fmt.Sprintf("/drop-zone/v2.0/package/%s/file/%s/upload-urls", u.PackageInfo.PackageCode, u.FileInfo.FileID)
 
 	rb := RequestBody{
-		FileName:   uploader.Args.FilesFlag,
+		FileName:   u.Args.FilesFlag,
 		UploadType: "DROP_ZONE",
-		Part:       uploader.FileInfo.Parts,
-		FileSize:   uploader.FileInfo.FileSize,
+		Part:       u.FileInfo.Parts,
+		FileSize:   u.FileInfo.FileSize,
 	}
 
 	rbJson, err := json.Marshal(rb)
@@ -106,25 +131,16 @@ func getUploadUrls(uploader *Uploader) {
 		panic(err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, uploader.RequestInfo.Url, bytes.NewBuffer(rbJson))
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("ss-api-key", uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", uploader.RequestInfo.SsRequestApiHeader)
-	req.Header.Set("content-type", "application/json;charset=utf-8")
-
-	resp, err := client.Do(req)
+	body, err := u.sendRequest(http.MethodPost, endpoint, rbJson)
 	if err != nil {
 		panic(err)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-
-	var bodyJson UploadUrlInfo
-	err = json.Unmarshal(body, &bodyJson)
-
-	uploader.UploadUrlInfo = bodyJson
+	err = json.Unmarshal(body, &u.UploadUrlInfo)
+	if err != nil {
+		return err
+	}
+	return nil
 
 }
 
@@ -164,8 +180,8 @@ func markPackageComplete(uploader *Uploader) {
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 
-	req.Header.Set("ss-api-key", uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", uploader.RequestInfo.SsRequestApiHeader)
+	req.Header.Set("ss-api-key", uploader.APIKey)
+	req.Header.Set("ss-request-api", uploader.RequestApiTarget)
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	if err != nil {
@@ -196,7 +212,7 @@ func finalizePackage(uploader *Uploader) {
 
 	var rb Rb
 
-	rb.Checksum = uploader.Secrets.Checksum
+	rb.Checksum = uploader.Checksum
 
 	rbJson, err := json.Marshal(rb)
 	if err != nil {
@@ -212,8 +228,8 @@ func finalizePackage(uploader *Uploader) {
 		panic(err)
 	}
 
-	req.Header.Set("ss-api-key", uploader.RequestInfo.SsApiKeyHeader)
-	req.Header.Set("ss-request-api", uploader.RequestInfo.SsRequestApiHeader)
+	req.Header.Set("ss-api-key", uploader.APIKey)
+	req.Header.Set("ss-request-api", uploader.RequestApiTarget)
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	resp, err := client.Do(req)
@@ -228,7 +244,7 @@ func finalizePackage(uploader *Uploader) {
 
 	uploader.FinalizeInfo = bodyJson
 
-	log.Print("Please use the following secure link to access your file(s): ", uploader.FinalizeInfo.Message+"#keyCode="+uploader.Secrets.ClientSecret)
+	log.Print("Please use the following secure link to access your file(s): ", uploader.FinalizeInfo.Message+"#keyCode="+uploader.ClientSecret)
 
 }
 

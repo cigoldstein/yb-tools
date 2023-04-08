@@ -56,7 +56,7 @@ func chunkAndEncryptFiles(fileName string, uploader *Uploader) []string {
 
 		log.Print("Name of file part: ", outFileName)
 		log.Print("Encrypting partBuffer")
-		encryptedPartBufferReader := EncryptFileParts(uploader.PackageInfo.ServerSecret, uploader.Secrets.ClientSecret, partBuffer)
+		encryptedPartBufferReader := EncryptFileParts(uploader.PackageInfo.ServerSecret, uploader.ClientSecret, partBuffer)
 		buf := &bytes.Buffer{}
 		buf.ReadFrom(encryptedPartBufferReader)
 
@@ -73,41 +73,37 @@ func chunkAndEncryptFiles(fileName string, uploader *Uploader) []string {
 
 func UploadLogs(args Args) {
 
-	var Uploader Uploader
-
-	Uploader.RequestInfo.SsApiKeyHeader = args.DropzoneIdFlag
-	Uploader.RequestInfo.SsRequestApiHeader = "DROP_ZONE"
+	uploader := CreateUploader("https://secure-upload.yugabyte.com", args.DropzoneIdFlag, "DROP_ZONE")
 
 	// Step 1 - Create a new Dropzone Package
-	createDropzonePackage(&Uploader)
+	uploader.createDropzonePackage()
 
 	// Generate clientSecret and checksum
-	CreateClientSecret(&Uploader)
-	CreateChecksum(&Uploader)
+	uploader.CreateChecksum()
 
 	for _, fileName := range args.FilesFlag {
 
 		// Step 2 - Add a File to the Package
 		// This step submits metadata about the file(s) to the SendSafely API
 		// The actual upload is performed later in the workflow
-		addFileToPackage(fileName, &Uploader)
+		uploader.addFileToPackage(fileName)
 
 		// Step 3 - Obtain the Upload URLs for each File Part
-		getUploadUrls(&Uploader)
+		uploader.getUploadUrls()
 
 		// Step 4 - Encrypt and Upload each File Part
 		// Files will be split, encrypted, and uploaded
-		fileNames := chunkAndEncryptFiles(fileName, &Uploader)
-		uploadFilePartsToPackage(fileNames, &Uploader)
+		fileNames := chunkAndEncryptFiles(fileName, uploader)
+		uploadFilePartsToPackage(fileNames, uploader)
 
 		// Step 5 - Mark the Upload as Complete
-		markPackageComplete(&Uploader)
+		markPackageComplete(uploader)
 
 		// Step 6 - Finalize the Package
-		finalizePackage(&Uploader)
+		finalizePackage(uploader)
 
 		// Step 7 - Invoke the Hosted Dropzone Submission Endpoint
-		submitHostedDropzone(&Uploader)
+		submitHostedDropzone(uploader)
 
 		log.Print("Done")
 	}
