@@ -2,19 +2,20 @@ package cmd
 
 import (
 	"fmt"
-	"main/log"
-	"main/structs"
-	"main/uploader"
 	"os"
 
+	uploader "github.com/yugabyte/yb-tools/yb-support-tool/sendsafelyuploader"
+
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-var Args structs.Args
-
-var Logger = log.CreateLogger(false, false)
+var Logger = CreateLogger(false, false)
 
 var Verion = "pre-release"
+
+var Args uploader.Args
 
 var (
 	rootCmd = &cobra.Command{
@@ -65,4 +66,33 @@ func init() {
 	// hide the dropzone_id flag from the help menu
 	uploadCmd.Flags().MarkHidden("dropzone_id")
 
+}
+
+// CreateLogger creates a logger
+func CreateLogger(debugFlag bool, verboseFlag bool) zap.SugaredLogger {
+
+	config := zap.NewProductionEncoderConfig()
+	config.EncodeTime = zapcore.ISO8601TimeEncoder
+	config.EncodeLevel = zapcore.CapitalColorLevelEncoder
+
+	var defaultConsoleLogLevel zapcore.Level
+
+	// configure verbosity and log-level
+	switch {
+	case debugFlag:
+		defaultConsoleLogLevel = zap.DebugLevel
+		config.FunctionKey = "true"
+	case verboseFlag:
+		defaultConsoleLogLevel = zap.InfoLevel
+		config.FunctionKey = "true"
+	default:
+		defaultConsoleLogLevel = zap.InfoLevel
+		config.TimeKey = ""
+		config.CallerKey = ""
+	}
+
+	consoleEncoder := zapcore.NewConsoleEncoder(config)
+	core := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), defaultConsoleLogLevel)
+	zapNew := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.FatalLevel))
+	return *zapNew.Sugar()
 }

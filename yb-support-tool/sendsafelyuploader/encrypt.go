@@ -1,4 +1,4 @@
-package uploader
+package sendsafelyuploader
 
 import (
 	"bytes"
@@ -8,17 +8,18 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"log"
+	"math/rand"
+	"time"
+
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"golang.org/x/crypto/pbkdf2"
-	"io"
-	"main/structs"
-	"math/rand"
-	"time"
 )
 
-func CreateClientSecret(uploader *structs.Uploader) {
+func CreateClientSecret(uploader *Uploader) {
 
 	rand.Seed(time.Now().UnixNano())
 	token := make([]byte, 32)
@@ -27,7 +28,7 @@ func CreateClientSecret(uploader *structs.Uploader) {
 
 }
 
-func CreateChecksum(uploader *structs.Uploader) {
+func CreateChecksum(uploader *Uploader) {
 
 	//packageCode := []byte("og089z0ja3Ti6mTFCHIrrR3EXErmC01e0ukrA0EaWu0")
 	//clientSecret := []byte("JoGe9M6DRXcvdhfjK3ggQLvNZKsE3b1kgGP6dAEmJlM")
@@ -86,7 +87,7 @@ func EncryptFileParts(serverSecret, clientSecret string, unencryptedFilePart []u
 
 	passphrase := serverSecret + clientSecret
 
-	Logger.Info("Encrypting file part with passphrase")
+	log.Print("Encrypting file part with passphrase")
 	encryptedArmoredFilePart, err := Encrypt([]byte(passphrase), unencryptedFilePart)
 	if err != nil {
 		// handle error
@@ -97,7 +98,7 @@ func EncryptFileParts(serverSecret, clientSecret string, unencryptedFilePart []u
 	if err != nil {
 		// handle error
 	}
-	Logger.Info("Encrypted file part to block.")
+	log.Print("Encrypted file part to block.")
 
 	return encryptedBlockFilePart.Body
 }

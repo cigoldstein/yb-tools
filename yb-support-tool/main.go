@@ -1,12 +1,11 @@
 package main
 
 import (
-	"main/cmd"
-	"main/log"
+	"fmt"
 	"time"
-)
 
-var Logger = log.CreateLogger(false, false)
+	"github.com/yugabyte/yb-tools/yb-support-tool/cmd"
+)
 
 func main() {
 	start := time.Now()
@@ -14,5 +13,5 @@ func main() {
 	// executes cobra for command line interaction
 	cmd.Execute()
 
-	Logger.Info("Execution time: ", time.Since(start))
+	fmt.Print("Execution time: ", time.Since(start))
 }

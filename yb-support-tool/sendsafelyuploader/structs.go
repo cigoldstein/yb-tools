@@ -1,4 +1,4 @@
-package structs
+package sendsafelyuploader
 
 type Uploader struct {
 	Args               Args

@@ -1,11 +1,11 @@
-package uploader
+package sendsafelyuploader
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"main/structs"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func createDropzonePackage(Uploader *structs.Uploader) {
+func createDropzonePackage(Uploader *Uploader) {
 
 	Uploader.RequestInfo.Url = "https://secure-upload.yugabyte.com/drop-zone/v2.0/package/"
 
@@ -32,14 +32,14 @@ func createDropzonePackage(Uploader *structs.Uploader) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	var bodyJson structs.PackageInfo
+	var bodyJson PackageInfo
 	err = json.Unmarshal(body, &bodyJson)
 
 	// this returns to Uploader.PackageInfo
 	Uploader.PackageInfo = bodyJson
 }
 
-func addFileToPackage(fileName string, uploader *structs.Uploader) {
+func addFileToPackage(fileName string, uploader *Uploader) {
 
 	uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file", uploader.PackageInfo.PackageCode)
 
@@ -81,20 +81,20 @@ func addFileToPackage(fileName string, uploader *structs.Uploader) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	var bodyJson structs.FileInfo
+	var bodyJson FileInfo
 	err = json.Unmarshal(body, &bodyJson)
 
 	// returns to Uploader.FileInfo
 	uploader.FileInfo = bodyJson
 }
 
-func getUploadUrls(uploader *structs.Uploader) {
+func getUploadUrls(uploader *Uploader) {
 
 	uploader.RequestInfo.Url = fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-urls", uploader.PackageInfo.PackageCode, uploader.FileInfo.FileID)
 
 	client := &http.Client{}
 
-	rb := structs.RequestBody{
+	rb := RequestBody{
 		FileName:   uploader.Args.FilesFlag,
 		UploadType: "DROP_ZONE",
 		Part:       uploader.FileInfo.Parts,
@@ -121,20 +121,20 @@ func getUploadUrls(uploader *structs.Uploader) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	var bodyJson structs.UploadUrlInfo
+	var bodyJson UploadUrlInfo
 	err = json.Unmarshal(body, &bodyJson)
 
 	uploader.UploadUrlInfo = bodyJson
 
 }
 
-func uploadFilePartsToPackage(fileNames []string, uploader *structs.Uploader) {
-	Logger.Info("Uploading ", uploader.FileInfo.Parts, " file parts")
+func uploadFilePartsToPackage(fileNames []string, uploader *Uploader) {
+	log.Print("Uploading ", uploader.FileInfo.Parts, " file parts")
 	client := &http.Client{}
 
 	for _, uploadUrl := range uploader.UploadUrlInfo.UploadUrls {
 
-		Logger.Info("fileNames[uploadUrl.Part-1]", fileNames[uploadUrl.Part-1])
+		log.Print("fileNames[uploadUrl.Part-1]", fileNames[uploadUrl.Part-1])
 
 		filePart, err := os.ReadFile(fileNames[uploadUrl.Part-1])
 
@@ -152,12 +152,12 @@ func uploadFilePartsToPackage(fileNames []string, uploader *structs.Uploader) {
 
 		body, err := ioutil.ReadAll(resp.Body)
 
-		var bodyJson structs.UploadUrlInfo
+		var bodyJson UploadUrlInfo
 		err = json.Unmarshal(body, &bodyJson)
 	}
 }
 
-func markPackageComplete(uploader *structs.Uploader) {
+func markPackageComplete(uploader *Uploader) {
 	client := &http.Client{}
 
 	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-complete", uploader.PackageInfo.PackageCode, uploader.FileInfo.FileID)
@@ -179,13 +179,13 @@ func markPackageComplete(uploader *structs.Uploader) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	var bodyJson structs.FileInfo
+	var bodyJson FileInfo
 	err = json.Unmarshal(body, &bodyJson)
-	Logger.Debug(string(body))
+	log.Print(string(body))
 
 }
 
-func finalizePackage(uploader *structs.Uploader) {
+func finalizePackage(uploader *Uploader) {
 	client := &http.Client{}
 
 	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/finalize", uploader.PackageInfo.PackageCode)
@@ -223,16 +223,16 @@ func finalizePackage(uploader *structs.Uploader) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	var bodyJson structs.FinalizeInfo
+	var bodyJson FinalizeInfo
 	err = json.Unmarshal(body, &bodyJson)
 
 	uploader.FinalizeInfo = bodyJson
 
-	Logger.Info("Please use the following secure link to access your file(s): ", uploader.FinalizeInfo.Message+"#keyCode="+uploader.Secrets.ClientSecret)
+	log.Print("Please use the following secure link to access your file(s): ", uploader.FinalizeInfo.Message+"#keyCode="+uploader.Secrets.ClientSecret)
 
 }
 
-func submitHostedDropzone(uploader *structs.Uploader) {
+func submitHostedDropzone(uploader *Uploader) {
 	dropzoneData := url.Values{}
 	dropzoneData.Set("name", "4095")
 	dropzoneData.Set("email", "cgoldstein@yugabyte.com")
@@ -259,9 +259,9 @@ func submitHostedDropzone(uploader *structs.Uploader) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	var bodyJson structs.HostedDropzoneInfo
+	var bodyJson HostedDropzoneInfo
 	err = json.Unmarshal(body, &bodyJson)
-	Logger.Info("submitDZBody: ", bodyJson)
+	log.Print("submitDZBody: ", bodyJson)
 
 	uploader.HostedDropzoneInfo = bodyJson
 }

@@ -1,26 +1,23 @@
-package uploader
+package sendsafelyuploader
 
 import (
 	"bytes"
 	"io/ioutil"
-	"main/log"
-	"main/structs"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 )
 
-var Logger = log.CreateLogger(false, false)
-
-func chunkAndEncryptFiles(fileName string, uploader *structs.Uploader) []string {
+func chunkAndEncryptFiles(fileName string, uploader *Uploader) []string {
 
 	var fileNames []string
 
 	file, err := os.Open(fileName)
 
 	if err != nil {
-		Logger.Error(err)
+		log.Fatal(err)
 		os.Exit(1)
 	}
 
@@ -38,7 +35,7 @@ func chunkAndEncryptFiles(fileName string, uploader *structs.Uploader) []string 
 	// determine how many parts we'll need to chunk the file into based on the defined fileChunkSize
 	totalPartNum := uint64(math.Ceil(float64(fileSize) / float64(fileChunkSize)))
 
-	Logger.Infof("Splitting to %d pieces.", totalPartNum)
+	log.Printf("Splitting to %d pieces.", totalPartNum)
 
 	// split files into "totalPartsNum" number of files
 	for i := uint64(0); i < totalPartNum; i++ {
@@ -54,12 +51,11 @@ func chunkAndEncryptFiles(fileName string, uploader *structs.Uploader) []string 
 		_, err := os.Create(outFileName)
 
 		if err != nil {
-			Logger.Error(err)
-			os.Exit(1)
+			log.Fatal(err)
 		}
 
-		Logger.Info("Name of file part: ", outFileName)
-		Logger.Info("Encrypting partBuffer")
+		log.Print("Name of file part: ", outFileName)
+		log.Print("Encrypting partBuffer")
 		encryptedPartBufferReader := EncryptFileParts(uploader.PackageInfo.ServerSecret, uploader.Secrets.ClientSecret, partBuffer)
 		buf := &bytes.Buffer{}
 		buf.ReadFrom(encryptedPartBufferReader)
@@ -75,9 +71,9 @@ func chunkAndEncryptFiles(fileName string, uploader *structs.Uploader) []string 
 
 }
 
-func UploadLogs(args structs.Args) {
+func UploadLogs(args Args) {
 
-	var Uploader structs.Uploader
+	var Uploader Uploader
 
 	Uploader.RequestInfo.SsApiKeyHeader = args.DropzoneIdFlag
 	Uploader.RequestInfo.SsRequestApiHeader = "DROP_ZONE"
@@ -113,6 +109,6 @@ func UploadLogs(args structs.Args) {
 		// Step 7 - Invoke the Hosted Dropzone Submission Endpoint
 		submitHostedDropzone(&Uploader)
 
-		Logger.Info("Done")
+		log.Print("Done")
 	}
 }
