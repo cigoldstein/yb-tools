@@ -113,7 +113,7 @@ func (u *Uploader) addFileToPackage(fileName string) error {
 
 	err = json.Unmarshal(body, &u.FileInfo)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to unmarshal server response: '%s' ; got unmarshal error %s", string(body), err)
 	}
 	return nil
 }
@@ -131,12 +131,12 @@ func (u *Uploader) getUploadURL(fileName string) error {
 
 	rbJson, err := json.Marshal(rb)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	body, err := u.sendRequest(http.MethodPost, endpoint, rbJson)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	err = json.Unmarshal(body, &u.UploadUrlInfo)
@@ -148,31 +148,20 @@ func (u *Uploader) getUploadURL(fileName string) error {
 }
 
 func (u *Uploader) uploadFilePartsToPackage(fileNames []string) error {
+
+	//TODO remove me
 	log.Print("Uploading ", u.FileInfo.Parts, " file parts")
-	client := &http.Client{}
 
 	for _, uploadUrl := range u.UploadUrlInfo.UploadUrls {
 
+		// TODO remove me
 		log.Print("fileNames[uploadUrl.Part-1]", fileNames[uploadUrl.Part-1])
 
 		filePart, err := os.ReadFile(fileNames[uploadUrl.Part-1])
 		if err != nil {
 			return err
 		}
-
-		req, err := http.NewRequest(http.MethodPut, uploadUrl.URL, bytes.NewBuffer(filePart))
-		if err != nil {
-			return err
-		}
-
-		req.Header.Set("ss-request-api", "DROP_ZONE")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := u.sendRequest(http.MethodPut, uploadUrl.URL, filePart)
 		if err != nil {
 			return err
 		}

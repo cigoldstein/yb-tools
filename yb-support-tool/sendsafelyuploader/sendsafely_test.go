@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -11,16 +12,21 @@ import (
 var (
 	testKey    = "testKey"
 	testTarget = "DROP_ZONE"
+
+	testOKResponse = `{"value":"OK"}`
+
+	testInvalidResponse = `invalid content`
 )
+
+func getUploader(URL string) *Uploader {
+	return CreateUploader(URL, testKey, testTarget)
+}
 
 func TestSendReqeust(t *testing.T) {
 
 	testPath := "/testPath"
 	testMethod := http.MethodPut
 	testBody := []byte("{type: test}")
-
-	testOKResponse := `{"value":"OK"}`
-	testInvalidResponse := `invalid content`
 
 	// test OK response
 	serverOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +83,28 @@ func TestSendReqeust(t *testing.T) {
 
 	if string(resp) != "" {
 		t.Errorf("Expected response '%s', instead got '%s'", testInvalidResponse, string(resp))
+	}
+
+}
+
+func TestAddFileToPackage(t *testing.T) {
+
+	fileName := "mytestfile"
+
+	// test something that can't be unmarshalled
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(testInvalidResponse))
+
+	}))
+	defer server.Close()
+
+	u := getUploader(server.URL)
+
+	err := u.addFileToPackage(fileName)
+
+	if !strings.Contains(err.Error(), testInvalidResponse) {
+		t.Errorf("Expected error response to show what server response failed to unmarshal, instead got: '%s'", err)
 	}
 
 }

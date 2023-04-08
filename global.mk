@@ -16,8 +16,8 @@ ${OUT_DIR}/creds: ${OUT_DIR}
 	@mkdir -p ${OUT_DIR}/creds
 
 clean:
-	rm -rf bin/
-	rm -rf out/
+	rm -rf ${GOBIN_DIR}
+	rm -rf ${OUT_DIR}
 
 # Run tests
 test: fmt vet lint

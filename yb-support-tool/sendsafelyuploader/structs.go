@@ -31,7 +31,7 @@ type PackageInfo struct {
 type FileInfo struct {
 	FileID          string `json:"fileId"`
 	FileName        string `json:"fileName"`
-	FileSize        int64  `json:"fileSize"`
+	FileSize        int64  `json:"fileSize,omitempty,string"`
 	Parts           int    `json:"parts"`
 	FileUploaded    string `json:"fileUploaded"`
 	FileUploadedStr string `json:"fileUploadedStr"`
