@@ -21,6 +21,7 @@ type Uploader struct {
 	RequestApiTarget string
 	ClientSecret     string
 	Checksum         string
+	Client           *http.Client
 
 	PackageInfo        PackageInfo
 	FileInfo           FileInfo
@@ -34,6 +35,7 @@ func CreateUploader(SSUrl, SSAPIKey, SSRequestTarget string) *Uploader {
 		APIKey:           SSAPIKey,
 		RequestApiTarget: SSRequestTarget,
 		ClientSecret:     createClientSecret(),
+		Client:           &http.Client{},
 	}
 	return &u
 }
@@ -41,10 +43,10 @@ func CreateUploader(SSUrl, SSAPIKey, SSRequestTarget string) *Uploader {
 // uses uploader credentials to send the provided body to the provided enpoint
 // returns the response body as an array of bytes and any errors
 func (u *Uploader) sendRequest(method, endpoint string, body []byte) ([]byte, error) {
-	client := &http.Client{}
+	fmt.Println(u.URL + endpoint)
 	req, err := http.NewRequest(method, u.URL+endpoint, bytes.NewBuffer(body))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	req.Header.Set("ss-api-key", u.APIKey)
 	req.Header.Set("ss-request-api", u.RequestApiTarget)
@@ -52,10 +54,11 @@ func (u *Uploader) sendRequest(method, endpoint string, body []byte) ([]byte, er
 	// TODO - does this need to be set only sometimes?
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
-	resp, err := client.Do(req)
+	resp, err := u.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)
 
@@ -63,7 +66,7 @@ func (u *Uploader) sendRequest(method, endpoint string, body []byte) ([]byte, er
 
 func (u *Uploader) createDropzonePackage() error {
 
-	endpoint := "drop-zone/v2.0/package/"
+	endpoint := "/drop-zone/v2.0/package/"
 
 	body, err := u.sendRequest(http.MethodPut, endpoint, nil)
 	if err != nil {
@@ -79,17 +82,9 @@ func (u *Uploader) createDropzonePackage() error {
 
 func (u *Uploader) addFileToPackage(fileName string) error {
 
-	endpoint := fmt.Sprintf("drop-zone/v2.0/package/%s/file", u.PackageInfo.PackageCode)
+	endpoint := fmt.Sprintf("/drop-zone/v2.0/package/%s/file", u.PackageInfo.PackageCode)
 
-	//todo pull out to main body
-	type reqBody struct {
-		Filename   string `json:"filename"`
-		UploadType string `json:"uploadType"`
-		Parts      int    `json:"parts"`
-		Filesize   int    `json:"filesize"`
-	}
-
-	rb := reqBody{
+	rb := FileUpload{
 		Filename:   filepath.Base(fileName),
 		UploadType: "DROP_ZONE",
 
@@ -115,15 +110,15 @@ func (u *Uploader) addFileToPackage(fileName string) error {
 	return nil
 }
 
-func (u *Uploader) getUploadUrls() error {
+func (u *Uploader) getUploadURL(fileName string) error {
 
 	endpoint := fmt.Sprintf("/drop-zone/v2.0/package/%s/file/%s/upload-urls", u.PackageInfo.PackageCode, u.FileInfo.FileID)
 
-	rb := RequestBody{
-		FileName:   u.Args.FilesFlag,
+	rb := FileUpload{
+		Filename:   fileName,
 		UploadType: "DROP_ZONE",
-		Part:       u.FileInfo.Parts,
-		FileSize:   u.FileInfo.FileSize,
+		Parts:      u.FileInfo.Parts,
+		Filesize:   u.FileInfo.FileSize,
 	}
 
 	rbJson, err := json.Marshal(rb)
@@ -144,44 +139,57 @@ func (u *Uploader) getUploadUrls() error {
 
 }
 
-func uploadFilePartsToPackage(fileNames []string, uploader *Uploader) {
-	log.Print("Uploading ", uploader.FileInfo.Parts, " file parts")
+func (u *Uploader) uploadFilePartsToPackage(fileNames []string) error {
+	log.Print("Uploading ", u.FileInfo.Parts, " file parts")
 	client := &http.Client{}
 
-	for _, uploadUrl := range uploader.UploadUrlInfo.UploadUrls {
+	for _, uploadUrl := range u.UploadUrlInfo.UploadUrls {
 
 		log.Print("fileNames[uploadUrl.Part-1]", fileNames[uploadUrl.Part-1])
 
 		filePart, err := os.ReadFile(fileNames[uploadUrl.Part-1])
+		if err != nil {
+			return err
+		}
 
 		req, err := http.NewRequest(http.MethodPut, uploadUrl.URL, bytes.NewBuffer(filePart))
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		req.Header.Set("ss-request-api", "DROP_ZONE")
 
 		resp, err := client.Do(req)
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
 
 		var bodyJson UploadUrlInfo
 		err = json.Unmarshal(body, &bodyJson)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func markPackageComplete(uploader *Uploader) {
+func (u *Uploader) markPackageComplete() error {
 	client := &http.Client{}
 
-	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-complete", uploader.PackageInfo.PackageCode, uploader.FileInfo.FileID)
+	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-complete", u.PackageInfo.PackageCode, u.FileInfo.FileID)
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
 
-	req.Header.Set("ss-api-key", uploader.APIKey)
-	req.Header.Set("ss-request-api", uploader.RequestApiTarget)
+	req.Header.Set("ss-api-key", u.APIKey)
+	req.Header.Set("ss-request-api", u.RequestApiTarget)
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	if err != nil {
@@ -190,21 +198,26 @@ func markPackageComplete(uploader *Uploader) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	var bodyJson FileInfo
 	err = json.Unmarshal(body, &bodyJson)
-	log.Print(string(body))
-
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func finalizePackage(uploader *Uploader) {
+func (u *Uploader) finalizePackage() error {
 	client := &http.Client{}
 
-	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/finalize", uploader.PackageInfo.PackageCode)
+	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/finalize", u.PackageInfo.PackageCode)
 
 	type Rb struct {
 		Checksum string
@@ -212,47 +225,53 @@ func finalizePackage(uploader *Uploader) {
 
 	var rb Rb
 
-	rb.Checksum = uploader.Checksum
+	rb.Checksum = u.Checksum
 
 	rbJson, err := json.Marshal(rb)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(rbJson))
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	req.Header.Set("ss-api-key", uploader.APIKey)
-	req.Header.Set("ss-request-api", uploader.RequestApiTarget)
+	req.Header.Set("ss-api-key", u.APIKey)
+	req.Header.Set("ss-request-api", u.RequestApiTarget)
 	req.Header.Set("content-type", "application/json;charset=utf-8")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	var bodyJson FinalizeInfo
 	err = json.Unmarshal(body, &bodyJson)
+	if err != nil {
+		return err
+	}
 
-	uploader.FinalizeInfo = bodyJson
+	u.FinalizeInfo = bodyJson
 
-	log.Print("Please use the following secure link to access your file(s): ", uploader.FinalizeInfo.Message+"#keyCode="+uploader.ClientSecret)
-
+	log.Print("Please use the following secure link to access your file(s): ", u.FinalizeInfo.Message+"#keyCode="+u.ClientSecret)
+	return nil
 }
 
-func submitHostedDropzone(uploader *Uploader) {
+func (u *Uploader) submitHostedDropzone() error {
 	dropzoneData := url.Values{}
 	dropzoneData.Set("name", "4095")
 	dropzoneData.Set("email", "cgoldstein@yugabyte.com")
-	dropzoneData.Set("packageCode", uploader.PackageInfo.PackageCode)
+	dropzoneData.Set("packageCode", u.PackageInfo.PackageCode)
 	dropzoneData.Set("publicApiKey", "BdFZz_JoZqtqPVueANkspD86KZ_PJsW1kIf_jVHeCO0")
 
 	encodedDzData := dropzoneData.Encode()
@@ -263,21 +282,29 @@ func submitHostedDropzone(uploader *Uploader) {
 
 	req, err := http.NewRequest(http.MethodPost, dropzoneUrl, strings.NewReader(encodedDzData))
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
 	var bodyJson HostedDropzoneInfo
 	err = json.Unmarshal(body, &bodyJson)
+	if err != nil {
+		return err
+	}
+
 	log.Print("submitDZBody: ", bodyJson)
 
-	uploader.HostedDropzoneInfo = bodyJson
+	u.HostedDropzoneInfo = bodyJson
+	return nil
 }

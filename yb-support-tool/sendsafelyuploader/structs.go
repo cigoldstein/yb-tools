@@ -14,11 +14,11 @@ type Args struct {
 	IsDropzoneFlagChanged bool
 }
 
-type RequestBody struct {
-	FileName   []string
-	Part       int `json:"part"`
-	UploadType string
-	FileSize   int64
+type FileUpload struct {
+	Filename   string `json:"filename"`
+	UploadType string `json:"uploadType"`
+	Parts      int    `json:"parts"`
+	Filesize   int64  `json:"filesize,omitempty,string"`
 }
 
 type PackageInfo struct {
@@ -60,9 +60,4 @@ type HostedDropzoneInfo struct {
 	Data            string   `json:"data"`
 	Digest          string   `json:"digest"`
 	IntegrationUrls []string `json:"integrationUrls"`
-}
-
-type Secrets struct {
-	ClientSecret string
-	Checksum     string
 }

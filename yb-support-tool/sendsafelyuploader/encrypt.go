@@ -46,7 +46,6 @@ func Encrypt(passphrase []byte, message []byte) ([]byte, error) {
 	encryptConfig.DefaultCipher = packet.CipherAES256
 	encryptConfig.DefaultCompressionAlgo = packet.CompressionNone
 	encryptConfig.DefaultHash = crypto.SHA256
-	encryptConfig.S2KCount = 65535
 
 	// Create buffer to write output to
 	buf := new(bytes.Buffer)
@@ -85,22 +84,22 @@ func Encrypt(passphrase []byte, message []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func EncryptFileParts(serverSecret, clientSecret string, unencryptedFilePart []uint8) io.Reader {
+func EncryptFileParts(serverSecret, clientSecret string, unencryptedFilePart []uint8) (io.Reader, error) {
 
 	passphrase := serverSecret + clientSecret
 
 	log.Print("Encrypting file part with passphrase")
 	encryptedArmoredFilePart, err := Encrypt([]byte(passphrase), unencryptedFilePart)
 	if err != nil {
-		// handle error
+		return nil, err
 	}
 
 	r := bytes.NewReader(encryptedArmoredFilePart)
 	encryptedBlockFilePart, err := armor.Decode(r)
 	if err != nil {
-		// handle error
+		return nil, err
 	}
 	log.Print("Encrypted file part to block.")
 
-	return encryptedBlockFilePart.Body
+	return encryptedBlockFilePart.Body, nil
 }

@@ -20,7 +20,6 @@ var Args uploader.Args
 // globals
 
 var (
-	dropzoneUrl   = "https://secure-upload.yugabyte.com/drop-zone/v2.0/package/"
 	SSUploaderURL = "https://secure-upload.yugabyte.com"
 )
 
@@ -35,7 +34,10 @@ var (
 		Long:  `Uploads a file or files up to a limit of 100GB to a support ticket. Requires exising ticket to be created`,
 		Run: func(cmd *cobra.Command, args []string) {
 			Args.IsDropzoneFlagChanged = cmd.Flags().Changed("dropzone_id")
-			uploader.UploadLogs(Args)
+			if err := uploader.UploadLogs(Args); err != nil {
+				fmt.Println(err)
+				os.Exit(2)
+			}
 		},
 	}
 	versionCmd = &cobra.Command{
@@ -58,6 +60,7 @@ func Execute() {
 	}
 }
 
+// nolint: errcheck
 func init() {
 	// root command flags
 	rootCmd.Flags().StringVarP(&Args.EmailFlag, "email", "e", "", "Email address of submitter (required)")

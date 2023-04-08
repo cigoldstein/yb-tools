@@ -2,7 +2,7 @@ TOP_BUILDDIR = ../.
 include ../global.mk
 
 
-.PHONEY: all yb-support-tool
+.PHONEY: all yb-support-tool test
 
 # go compile options
 GOOS ?= linux
@@ -21,3 +21,6 @@ ${BIN_DIR}/${BIN_NAME}:
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -a -o $@ -ldflags=" \
 	-X 'github.com/yugabyte/yb-tools/yb-support-tool/cmd.Version=${VERSION}'"
 
+
+test:
+	go test -v ./...
