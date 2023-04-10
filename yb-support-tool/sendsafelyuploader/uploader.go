@@ -18,8 +18,7 @@ func chunkAndEncryptFiles(fileName string, uploader *Uploader) ([]string, error)
 	file, err := os.Open(fileName)
 
 	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
+		return nil, err
 	}
 
 	defer file.Close()
@@ -48,11 +47,11 @@ func chunkAndEncryptFiles(fileName string, uploader *Uploader) ([]string, error)
 		// write to disk and append the loop counter to each file part
 		// hard coded for testing
 		//outFileName := "split_files/testfile.txt_" + strconv.FormatUint(i+1, 10)
-		outFileName := "split_files/" + filepath.Base(fileName) + "_" + strconv.FormatInt(i, 10)
+		outFileName := "/tmp/" + filepath.Base(fileName) + "_" + strconv.FormatInt(i, 10)
 		_, err := os.Create(outFileName)
 
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 
 		log.Print("Name of file part: ", outFileName)

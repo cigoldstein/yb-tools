@@ -1,6 +1,7 @@
 package sendsafelyuploader
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -107,4 +108,65 @@ func TestAddFileToPackage(t *testing.T) {
 		t.Errorf("Expected error response to show what server response failed to unmarshal, instead got: '%s'", err)
 	}
 
+}
+
+func TestGetUploadURL(t *testing.T) {
+	fileName := "mytestfile"
+
+	validUploadURLInfo, _ := json.Marshal(
+		UploadUrlInfo{
+			URLS: []UploadURL{
+				UploadURL{
+					Part: 1,
+					URL:  `https://sendsafely-us-west-2.s3-accelerate.amazonaws.com/commercial/e93ec274-e586-4f55-8eab-498a8444cf94/f0805497-314d-4eac-ac52-80f4fb40d9eb-1?AWSAccessKeyId=AKIAJNE5FSA2YFQP4BDA&Expires=1680894043&Signature=3R%2FbQJrY1XXObIa5XUvm6ntk3sE%3D`,
+				},
+			},
+
+			Response: "SUCCESS"})
+
+	// check that we hit endpoint "/drop-zone/v2.0/package/%s/file/%s/upload-urls"
+	validServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// test that r.Body contains upload-urls
+		w.Write(validUploadURLInfo)
+
+	}))
+	defer validServer.Close()
+	u := getUploader(validServer.URL)
+
+	// test that if PackageCode is missing in uploader, getUploadURL fails with error
+	u.PackageInfo.PackageCode = ""
+	err := u.getUploadURL(fileName)
+
+	if err == nil {
+		t.Error("Expected an error from function because PackageCode empty, but instead function has no err")
+	}
+	// error string should contain filename for reference
+	if !strings.Contains(err.Error(), fileName) {
+		t.Errorf("Expected failure message to contain filename: '%s', instead got message: '%s'", fileName, err.Error())
+	}
+
+	// test that if we get `"RESPONSE": "FAIL"` return, that we get a valid error
+
+	invalidUploadURLInfo, _ := json.Marshal(
+		UploadUrlInfo{
+			Response: "FAIL",
+			Message:  "An error occurred.  Error Id {some error code}",
+		})
+
+	failServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(invalidUploadURLInfo))
+
+	}))
+	defer failServer.Close()
+
+	uf := getUploader(failServer.URL)
+
+	uf.PackageInfo.PackageCode = "sMN0ghoCOkxFiOBHlXhscb1qS3fMmd7sV0012gIRutU"
+	err = uf.getUploadURL(fileName)
+
+	if err == nil {
+		t.Error("Expected to get response message from server that we got a FAILURE, instead got not error")
+	}
 }

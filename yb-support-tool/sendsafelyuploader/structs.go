@@ -18,6 +18,7 @@ type FileUpload struct {
 	Filename   string `json:"filename"`
 	UploadType string `json:"uploadType"`
 	Parts      int    `json:"parts"`
+	Part       int    `json:"part"`
 	Filesize   int64  `json:"filesize,omitempty,string"`
 }
 
@@ -42,11 +43,14 @@ type FileInfo struct {
 }
 
 type UploadUrlInfo struct {
-	UploadUrls []struct {
-		Part int    `json:"part"`
-		URL  string `json:"url"`
-	} `json:"uploadUrls"`
-	Response string `json:"response"`
+	URLS     []UploadURL `json:"uploadUrls"`
+	Response string      `json:"response"`
+	Message  string      `json:"message"`
+}
+
+type UploadURL struct {
+	Part int    `json:"part"`
+	URL  string `json:"url"`
 }
 
 type FinalizeInfo struct {

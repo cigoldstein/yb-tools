@@ -40,9 +40,25 @@ func CreateUploader(SSUrl, SSAPIKey, SSRequestTarget string) *Uploader {
 	return &u
 }
 
+type uploadReqOption func(*http.Request)
+
+// nolint: unused
+func withReqJSONHeader() uploadReqOption {
+	return func(r *http.Request) {
+		r.Header.Set("content-type", "application/json;charset=utf-8")
+	}
+}
+
+// nolint: unused
+func withReqFormHeader() uploadReqOption {
+	return func(r *http.Request) {
+		r.Header.Set("content-type", "application/x-www-form-urlencoded")
+	}
+}
+
 // uses uploader credentials to send the provided body to the provided enpoint
 // returns the response body as an array of bytes and any errors
-func (u *Uploader) sendRequest(method, endpoint string, body []byte) ([]byte, error) {
+func (u *Uploader) sendRequest(method, endpoint string, body []byte, reqOptions ...uploadReqOption) ([]byte, error) {
 	fmt.Println(u.URL + endpoint)
 	req, err := http.NewRequest(method, u.URL+endpoint, bytes.NewBuffer(body))
 	if err != nil {
@@ -51,8 +67,9 @@ func (u *Uploader) sendRequest(method, endpoint string, body []byte) ([]byte, er
 	req.Header.Set("ss-api-key", u.APIKey)
 	req.Header.Set("ss-request-api", u.RequestApiTarget)
 
-	// TODO - does this need to be set only sometimes?
-	req.Header.Set("content-type", "application/json;charset=utf-8")
+	for _, option := range reqOptions {
+		option(req)
+	}
 
 	resp, err := u.Client.Do(req)
 	if err != nil {
@@ -89,7 +106,6 @@ func (u *Uploader) createDropzonePackage() error {
 }
 
 func (u *Uploader) addFileToPackage(fileName string) error {
-
 	endpoint := fmt.Sprintf("/drop-zone/v2.0/package/%s/file", u.PackageInfo.PackageCode)
 
 	rb := FileUpload{
@@ -106,12 +122,13 @@ func (u *Uploader) addFileToPackage(fileName string) error {
 		return (err)
 	}
 
-	body, err := u.sendRequest(http.MethodPut, endpoint, rbJson)
+	body, err := u.sendRequest(http.MethodPut, endpoint, rbJson, withReqJSONHeader())
 	if err != nil {
 		return (err)
 	}
 
 	err = json.Unmarshal(body, &u.FileInfo)
+	fmt.Println(string(body))
 	if err != nil {
 		return fmt.Errorf("Failed to unmarshal server response: '%s' ; got unmarshal error %s", string(body), err)
 	}
@@ -119,13 +136,15 @@ func (u *Uploader) addFileToPackage(fileName string) error {
 }
 
 func (u *Uploader) getUploadURL(fileName string) error {
+	if u.PackageInfo.PackageCode == "" {
+		return fmt.Errorf("No package code provided for file: '%s', cannot get list of upload URLs", fileName)
+	}
 
 	endpoint := fmt.Sprintf("/drop-zone/v2.0/package/%s/file/%s/upload-urls", u.PackageInfo.PackageCode, u.FileInfo.FileID)
-
 	rb := FileUpload{
 		Filename:   fileName,
 		UploadType: "DROP_ZONE",
-		Parts:      u.FileInfo.Parts,
+		Part:       1,
 		Filesize:   u.FileInfo.FileSize,
 	}
 
@@ -134,7 +153,7 @@ func (u *Uploader) getUploadURL(fileName string) error {
 		return err
 	}
 
-	body, err := u.sendRequest(http.MethodPost, endpoint, rbJson)
+	body, err := u.sendRequest(http.MethodPost, endpoint, rbJson, withReqJSONHeader())
 	if err != nil {
 		return err
 	}
@@ -142,6 +161,9 @@ func (u *Uploader) getUploadURL(fileName string) error {
 	err = json.Unmarshal(body, &u.UploadUrlInfo)
 	if err != nil {
 		return err
+	}
+	if u.UploadUrlInfo.Response != "SUCCESS" {
+		return fmt.Errorf("Failed to get upload URLs with message: '%s'", u.UploadUrlInfo.Message)
 	}
 	return nil
 
@@ -152,7 +174,8 @@ func (u *Uploader) uploadFilePartsToPackage(fileNames []string) error {
 	//TODO remove me
 	log.Print("Uploading ", u.FileInfo.Parts, " file parts")
 
-	for _, uploadUrl := range u.UploadUrlInfo.UploadUrls {
+	for _, uploadUrl := range u.UploadUrlInfo.URLS {
+		fmt.Println("Upload URL:" + uploadUrl.URL)
 
 		// TODO remove me
 		log.Print("fileNames[uploadUrl.Part-1]", fileNames[uploadUrl.Part-1])
@@ -168,6 +191,9 @@ func (u *Uploader) uploadFilePartsToPackage(fileNames []string) error {
 
 		var bodyJson UploadUrlInfo
 		err = json.Unmarshal(body, &bodyJson)
+
+		//TODO remove
+		fmt.Println(bodyJson.Response)
 		if err != nil {
 			return err
 		}
@@ -176,29 +202,10 @@ func (u *Uploader) uploadFilePartsToPackage(fileNames []string) error {
 }
 
 func (u *Uploader) markPackageComplete() error {
-	client := &http.Client{}
 
-	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/file/%s/upload-complete", u.PackageInfo.PackageCode, u.FileInfo.FileID)
+	endpoint := fmt.Sprintf("/drop-zone/v2.0/package/%s/file/%s/upload-complete", u.PackageInfo.PackageCode, u.FileInfo.FileID)
 
-	req, err := http.NewRequest(http.MethodPost, url, nil)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("ss-api-key", u.APIKey)
-	req.Header.Set("ss-request-api", u.RequestApiTarget)
-	req.Header.Set("content-type", "application/json;charset=utf-8")
-
-	if err != nil {
-		panic(err)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := u.sendRequest(http.MethodPost, endpoint, nil, withReqJSONHeader())
 	if err != nil {
 		return err
 	}
@@ -212,9 +219,8 @@ func (u *Uploader) markPackageComplete() error {
 }
 
 func (u *Uploader) finalizePackage() error {
-	client := &http.Client{}
 
-	url := fmt.Sprintf("https://secure-upload.yugabyte.com/drop-zone/v2.0/package/%s/finalize", u.PackageInfo.PackageCode)
+	endpoint := fmt.Sprintf("/drop-zone/v2.0/package/%s/finalize", u.PackageInfo.PackageCode)
 
 	type Rb struct {
 		Checksum string
@@ -229,25 +235,7 @@ func (u *Uploader) finalizePackage() error {
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(rbJson))
-	if err != nil {
-		return err
-	}
-
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("ss-api-key", u.APIKey)
-	req.Header.Set("ss-request-api", u.RequestApiTarget)
-	req.Header.Set("content-type", "application/json;charset=utf-8")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := u.sendRequest(http.MethodPost, endpoint, rbJson, withReqJSONHeader())
 	if err != nil {
 		return err
 	}
@@ -264,6 +252,7 @@ func (u *Uploader) finalizePackage() error {
 	return nil
 }
 
+// TODO this needs fixing
 func (u *Uploader) submitHostedDropzone() error {
 	dropzoneData := url.Values{}
 	dropzoneData.Set("name", "4095")
