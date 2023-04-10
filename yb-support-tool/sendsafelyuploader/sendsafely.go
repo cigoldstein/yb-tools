@@ -40,18 +40,29 @@ func CreateUploader(SSUrl, SSAPIKey, SSRequestTarget string) *Uploader {
 	return &u
 }
 
-type uploadReqOption func(*http.Request)
+type uploadReqOption func(*http.Request) error
 
 func withReqJSONHeader() uploadReqOption {
-	return func(r *http.Request) {
+	return func(r *http.Request) error {
 		r.Header.Set("content-type", "application/json;charset=utf-8")
+		return nil
+	}
+}
+
+// nolint: unused
+func withCustomURL(customURL string) uploadReqOption {
+	return func(r *http.Request) error {
+		var err error
+		r.URL, err = url.Parse(customURL)
+		return err
 	}
 }
 
 // nolint: unused
 func withReqFormHeader() uploadReqOption {
-	return func(r *http.Request) {
+	return func(r *http.Request) error {
 		r.Header.Set("content-type", "application/x-www-form-urlencoded")
+		return nil
 	}
 }
 
@@ -67,7 +78,9 @@ func (u *Uploader) sendRequest(method, endpoint string, body []byte, reqOptions 
 	req.Header.Set("ss-request-api", u.RequestApiTarget)
 
 	for _, option := range reqOptions {
-		option(req)
+		if err := option(req); err != nil {
+			return nil, err
+		}
 	}
 
 	resp, err := u.Client.Do(req)
