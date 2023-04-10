@@ -42,7 +42,6 @@ func CreateUploader(SSUrl, SSAPIKey, SSRequestTarget string) *Uploader {
 
 type uploadReqOption func(*http.Request)
 
-// nolint: unused
 func withReqJSONHeader() uploadReqOption {
 	return func(r *http.Request) {
 		r.Header.Set("content-type", "application/json;charset=utf-8")
