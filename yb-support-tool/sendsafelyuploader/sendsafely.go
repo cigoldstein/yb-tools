@@ -50,7 +50,7 @@ func withReqJSONHeader() uploadReqOption {
 }
 
 // nolint: unused
-func withCustomURL(customURL string) uploadReqOption {
+func withUploadURL(customURL string) uploadReqOption {
 	return func(r *http.Request) error {
 		var err error
 		r.URL, err = url.Parse(customURL)
