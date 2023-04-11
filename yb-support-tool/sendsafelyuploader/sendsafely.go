@@ -181,6 +181,7 @@ func (u *Uploader) getUploadURL(fileName string) error {
 
 }
 
+// TODO: replace with encrypt and upload file parts
 func (u *Uploader) uploadFilePartsToPackage(fileNames []string) error {
 
 	//TODO remove me
@@ -210,6 +211,29 @@ func (u *Uploader) uploadFilePartsToPackage(fileNames []string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// TODO: calling function is aware of the corresponding "part" number for this URL
+func (u *Uploader) uploadFilePart(part []byte, url string) error {
+
+	if len(part) == 0 {
+		return fmt.Errorf("file part is empty")
+	}
+
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(part))
+	req.Header.Set("ss-request-api", "DROP_ZONE")
+
+	if err != nil {
+		return err
+	}
+
+	_, err = u.Client.Do(req)
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
