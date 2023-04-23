@@ -4,23 +4,43 @@ import (
 	"fmt"
 	"os"
 
-	uploader "github.com/yugabyte/yb-tools/yb-support-tool/sendsafelyuploader"
+	"github.com/docker/go-units"
 
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
-
-var Logger = CreateLogger(false, false)
 
 var Version = "pre-release"
 
-var Args uploader.Args
+// uploader variables
+var (
+	verbose bool
+
+	// dropzone details
+	dropzoneID  string
+	uploaderURL string
+
+	// uploader variables
+	caseNum int
+	email   string
+
+	// package settings
+	concurrency    int
+	retries        int
+	partSize       int64
+	partSizeString string
+)
+
+const (
+	defaultRetries = 5
+	// testing shows these to be a good balance of speed and lower memory / CPU usage
+	defaultConcurency = 10
+	defaultPartSize   = 10 * units.MiB
+)
 
 // globals
-
-var (
-	SSUploaderURL = "https://secure-upload.yugabyte.com"
+const (
+	YBUploaderURL = "https://secure-upload.yugabyte.com"
+	YBDropzoneID  = "BdFZz_JoZqtqPVueANkspD86KZ_PJsW1kIf_jVHeCO0"
 )
 
 var (
@@ -29,13 +49,13 @@ var (
 		Short: "Yugabyte Support Tool",
 	}
 	uploadCmd = &cobra.Command{
-		Use:   "upload",
+		Use:   "upload -c [case number] -e [email] [files]",
 		Short: "Upload attachment to a support case",
 		Long:  `Uploads a file or files up to a limit of 100GB to a support ticket. Requires exising ticket to be created`,
+		Args:  cobra.RangeArgs(1, 10),
 		Run: func(cmd *cobra.Command, args []string) {
-			Args.IsDropzoneFlagChanged = cmd.Flags().Changed("dropzone_id")
-			if err := uploader.UploadLogs(Args); err != nil {
-				fmt.Println(err)
+			if err := Upload(email, caseNum, args); err != nil {
+				fmt.Fprintln(os.Stderr, err)
 				os.Exit(2)
 			}
 		},
@@ -63,54 +83,18 @@ func Execute() {
 // nolint: errcheck
 func init() {
 	// root command flags
-	rootCmd.Flags().StringVarP(&Args.EmailFlag, "email", "e", "", "Email address of submitter (required)")
-
-	rootCmd.MarkFlagRequired("email")
 
 	//subcommands
 	rootCmd.AddCommand(uploadCmd)
+	rootCmd.AddCommand(BundleCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "Print verbose logs")
 
-	// upload command flags
-	uploadCmd.Flags().StringSliceVarP(&Args.FilesFlag, "files", "f", nil, "List of files to upload")
-	uploadCmd.Flags().IntVarP(&Args.CaseNumFlag, "case_num", "c", 0, "Zendesk case number to attach files to (required)")
+	// uploader flags
+	addUploaderFlags()
 
-	uploadCmd.MarkFlagRequired("files")
-	uploadCmd.MarkFlagRequired("case_num")
+	// bundle subcommands cmds, get and create and flags
+	addBundleSubcommands()
+	addBundleFlags()
 
-	// default dropzone ID is set to Yugabyte Support's anonymous dropzone
-	// this can be overridden with the --dropzone_id flag
-	uploadCmd.Flags().StringVar(&Args.DropzoneIdFlag, "dropzone_id", "BdFZz_JoZqtqPVueANkspD86KZ_PJsW1kIf_jVHeCO0", "Override default dropzone ID")
-	// hide the dropzone_id flag from the help menu
-	uploadCmd.Flags().MarkHidden("dropzone_id")
-
-}
-
-// CreateLogger creates a logger
-func CreateLogger(debugFlag bool, verboseFlag bool) zap.SugaredLogger {
-
-	config := zap.NewProductionEncoderConfig()
-	config.EncodeTime = zapcore.ISO8601TimeEncoder
-	config.EncodeLevel = zapcore.CapitalColorLevelEncoder
-
-	var defaultConsoleLogLevel zapcore.Level
-
-	// configure verbosity and log-level
-	switch {
-	case debugFlag:
-		defaultConsoleLogLevel = zap.DebugLevel
-		config.FunctionKey = "true"
-	case verboseFlag:
-		defaultConsoleLogLevel = zap.InfoLevel
-		config.FunctionKey = "true"
-	default:
-		defaultConsoleLogLevel = zap.InfoLevel
-		config.TimeKey = ""
-		config.CallerKey = ""
-	}
-
-	consoleEncoder := zapcore.NewConsoleEncoder(config)
-	core := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), defaultConsoleLogLevel)
-	zapNew := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.FatalLevel))
-	return *zapNew.Sugar()
 }
